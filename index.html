@@ -83,6 +83,8 @@ button { font: inherit; cursor: pointer; }
 .qr { justify-self: start; background: #ffffff; padding: 12px; border-radius: 8px; line-height: 0; }
 .qr img, .qr canvas { width: 200px; height: 200px; max-width: 100%; }
 .notice.warn { background: var(--out-soft); }
+.notice.quiet { padding: 6px 12px; font-size: 0.84rem; }
+.notice.quiet .ghost { padding: 3px 8px; font-size: 0.78rem; }
 .notice:not(.warn) { background: var(--accent-soft); }
 .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
 
@@ -850,12 +852,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
       $("localNotice").classList.toggle("warn", syncEstado === "chave" || (syncEstado === "offline" && n > 0));
       return;
     }
-    const bk = ub ? `Último backup: ${new Date(ub).toLocaleDateString("pt-BR")}.` : "Você ainda não fez backup.";
-    const prot = persistido
-      ? "Os dados estão protegidos neste aparelho."
+    // Protegido: salva sozinho, sem cobrar backup. Desprotegido: explica como instalar.
+    $("localMsg").textContent = persistido
+      ? "Tudo é salvo automaticamente neste aparelho."
       : "Atenção: este navegador pode apagar os dados. Abra o app pelo Chrome ou Safari (não pelo WhatsApp ou aba anônima) e instale na tela inicial.";
-    $("localMsg").textContent = `${prot} ${bk} Para não perder nada e usar em vários aparelhos, conecte uma Planilha Google.`;
-    $("localNotice").classList.toggle("warn", !persistido || (store.total() > 0 && (dias === null || dias >= 7)));
+    $("localNotice").classList.toggle("warn", !persistido);
+    $("localNotice").classList.toggle("quiet", !!persistido);
   }
 
   // ---------- conexão com a planilha ----------

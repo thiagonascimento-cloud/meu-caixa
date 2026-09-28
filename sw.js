@@ -1,5 +1,5 @@
 // Guarda o app no aparelho para abrir sem internet; busca a versão nova quando houver rede.
-const CACHE = "meu-caixa-v6";
+const CACHE = "meu-caixa-v7";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
