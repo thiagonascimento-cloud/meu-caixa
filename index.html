@@ -80,6 +80,8 @@ button { font: inherit; cursor: pointer; }
 .backup label.ghost { cursor: pointer; }
 .syncform { flex-basis: 100%; display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
 .syncform .primary { padding: 8px 16px; }
+.qr { justify-self: start; background: #ffffff; padding: 12px; border-radius: 8px; line-height: 0; }
+.qr img, .qr canvas { width: 200px; height: 200px; max-width: 100%; }
 .notice.warn { background: var(--out-soft); }
 .notice:not(.warn) { background: var(--accent-soft); }
 .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
@@ -213,10 +215,20 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
       <input type="file" id="impFile" accept="application/json,.json" hidden>
       <button type="button" class="ghost" id="syncBtn">Sincronizar com Google</button>
     </span>
+    <div id="pairBox" class="syncform" hidden>
+      <strong>Conectar outro aparelho</strong>
+      <p class="hint">No outro celular, abra a câmera e aponte para este código. O Meu Caixa abre já conectado à sua planilha. Não mostre este código para outras pessoas: ele dá acesso aos seus dados.</p>
+      <div id="qr" class="qr" aria-label="QR Code de conexão"></div>
+      <p class="hint">Sem câmera? Copie o código e cole no outro aparelho, em Sincronizar com Google.</p>
+      <div class="backup"><button type="button" class="ghost" id="copyCode">Copiar código de conexão</button><button type="button" class="ghost" id="pairClose">Fechar</button></div>
+      <p class="toast" id="pToast2" role="status"></p>
+    </div>
     <form id="syncForm" class="syncform" hidden autocomplete="off">
+      <label class="field"><span>Código de conexão (se você copiou de outro aparelho)</span><input id="sCodigo" autocapitalize="off" spellcheck="false" placeholder="mc1.…"></label>
+      <p class="hint">Ou preencha o endereço e a chave:</p>
       <label class="field"><span>Endereço do App da Web (termina em /exec)</span><input id="sUrl" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
       <label class="field"><span>Chave</span><input id="sChave" autocapitalize="off" spellcheck="false"></label>
-      <div class="backup"><button class="primary" type="submit">Conectar</button><button type="button" class="ghost" id="sOff" hidden>Desconectar</button></div>
+      <div class="backup"><button class="primary" type="submit">Conectar</button><button type="button" class="ghost" id="sPair" hidden>Conectar outro aparelho</button><button type="button" class="ghost" id="sOff" hidden>Desconectar</button></div>
       <p class="toast" id="sToast" role="status"></p>
     </form>
   </div>
@@ -472,6 +484,25 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   // cada alteração entra numa fila salva no aparelho e é enviada quando há internet.
   const SYNC_KEY = "meu-caixa-sync", FILA_KEY = "meu-caixa-fila";
   let syncEstado = null, syncHora = null;
+  const URL_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+  // Código de conexão: "mc1." + endereço e chave em base64, para levar a outro aparelho numa vez só.
+  function gerarCodigo(cfg) { return "mc1." + btoa(JSON.stringify({ u: cfg.url, k: cfg.chave })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+  function lerCodigo(s) {
+    try {
+      s = String(s || "").trim().replace(/^.*#conectar=/, "");
+      if (!s.startsWith("mc1.")) return null;
+      let b = s.slice(4).replace(/-/g, "+").replace(/_/g, "/"); while (b.length % 4) b += "=";
+      const o = JSON.parse(atob(b));
+      return o && URL_OK.test(o.u) && typeof o.k === "string" && o.k.length >= 8 ? { url: o.u, chave: o.k } : null;
+    } catch (e) { return null; }
+  }
+  // Abriu pelo QR Code: guarda a conexão e tira o código do endereço.
+  (function conectarPeloLink() {
+    if (!location.hash.startsWith("#conectar=")) return;
+    const cfg = lerCodigo(location.hash);
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    if (cfg) try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) {}
+  })();
   function lerSyncCfg() { try { const c = JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); return c && c.url && c.chave ? c : null; } catch (e) { return null; } }
   function syncStore(local, cfg) {
     let fila = [];
@@ -830,19 +861,48 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     const f = $("syncForm"); f.hidden = !f.hidden;
     const cfg = lerSyncCfg();
     $("sUrl").value = cfg ? cfg.url : ""; $("sChave").value = cfg ? cfg.chave : "";
-    $("sOff").hidden = !cfg;
-    if (!f.hidden) $("sUrl").focus();
+    $("sOff").hidden = !cfg; $("sPair").hidden = !cfg; $("sCodigo").value = "";
+    $("pairBox").hidden = true;
+    if (!f.hidden) (cfg ? $("sPair") : $("sCodigo")).focus();
   };
+  $("sPair").onclick = () => mostrarPareamento();
+  $("pairClose").onclick = () => { $("pairBox").hidden = true; $("qr").innerHTML = ""; };
+  $("copyCode").onclick = async () => {
+    const cfg = lerSyncCfg(); if (!cfg) return;
+    const code = gerarCodigo(cfg);
+    try { await navigator.clipboard.writeText(code); toast("pToast2", "Código copiado. Cole no outro aparelho, em Sincronizar com Google."); }
+    catch (e) { toast("pToast2", code); }
+  };
+  function carregarQR() {
+    if (window.QRCode) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+  async function mostrarPareamento() {
+    const cfg = lerSyncCfg(); if (!cfg) return;
+    $("syncForm").hidden = true; $("pairBox").hidden = false; $("qr").innerHTML = "";
+    const link = location.origin + location.pathname + "#conectar=" + gerarCodigo(cfg);
+    try {
+      await carregarQR();
+      new QRCode($("qr"), { text: link, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.M });
+    } catch (e) { $("qr").hidden = true; toast("pToast2", "Sem internet para gerar o QR Code. Use Copiar código.", true); }
+  }
   $("syncForm").onsubmit = (e) => {
     e.preventDefault();
-    const url = $("sUrl").value.trim(), chave = $("sChave").value.trim();
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { toast("sToast", "Cole o endereço do App da Web, que termina em /exec.", true); return; }
+    const doCodigo = $("sCodigo").value.trim() ? lerCodigo($("sCodigo").value) : null;
+    if ($("sCodigo").value.trim() && !doCodigo) { toast("sToast", "Esse código não é válido. Copie de novo no aparelho já conectado.", true); return; }
+    const url = doCodigo ? doCodigo.url : $("sUrl").value.trim(), chave = doCodigo ? doCodigo.chave : $("sChave").value.trim();
+    if (!URL_OK.test(url)) { toast("sToast", "Cole o endereço do App da Web, que termina em /exec.", true); return; }
     if (chave.length < 8) { toast("sToast", "Cole a chave que apareceu no Apps Script.", true); return; }
     try { localStorage.setItem(SYNC_KEY, JSON.stringify({ url, chave })); } catch (err) {}
     store = syncStore(localBase, { url, chave });
     syncEstado = null; store.enviarTudo(); updStatus();
     $("syncForm").hidden = true;
     toast("bkToast", "Conectado. Enviando seus dados para a planilha…");
+    setTimeout(mostrarPareamento, 400);
   };
   $("sOff").onclick = () => {
     try { localStorage.removeItem(SYNC_KEY); localStorage.removeItem(FILA_KEY); } catch (err) {}
