@@ -10,3 +10,13 @@ Abra o `index.html` no navegador. Os dados ficam salvos só no navegador em que 
 - **Provento:** salário e outras entradas.
 - **Me pagaram:** pagamentos de quem te deve.
 - **Cartões:** cadastro dos seus cartões (sem número, só nome, bandeira, vencimento e cor).
+
+## Instalar no celular
+
+O app é um PWA: abra https://thiagonascimento-cloud.github.io/meu-caixa/ no Chrome do Android e toque em **Instalar app** (ou **⋮ → Adicionar à tela inicial**). Funciona sem internet.
+
+## Backup
+
+Como os dados ficam no aparelho, use **Exportar backup** para salvar um arquivo `.json` e **Importar backup** para carregar em outro aparelho.
+
+Política de privacidade: https://thiagonascimento-cloud.github.io/meu-caixa/privacidade.html

@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f6b4f">
+<meta name="description" content="Controle financeiro pessoal: gastos por cartão, parcelas, proventos e quem te deve.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -71,6 +76,8 @@ button { font: inherit; cursor: pointer; }
 .month button:hover { background: var(--surface-2); }
 .month strong { font-family: var(--font-display); min-width: 150px; text-align: center; text-transform: capitalize; }
 
+.backup { display: flex; gap: 8px; flex-wrap: wrap; }
+.backup label.ghost { cursor: pointer; }
 .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
 
 /* resumo */
@@ -195,8 +202,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   </header>
 
   <div class="notice" id="localNotice" hidden>
-    <span>Os dados estão sendo salvos só neste navegador.</span>
+    <span>Seus dados ficam salvos só neste aparelho. Faça um backup de vez em quando.</span>
+    <span class="backup">
+      <button type="button" class="ghost" id="expBtn">Exportar backup</button>
+      <label class="ghost" for="impFile" id="impLbl">Importar backup</label>
+      <input type="file" id="impFile" accept="application/json,.json" hidden>
+    </span>
   </div>
+  <p class="toast" id="bkToast" role="status"></p>
 
   <section class="summary" aria-label="Resumo do mês">
     <div class="stat"><span class="label">Proventos do mês</span><span class="v in num" id="sumIn">R$ 0,00</span><span class="s" id="sumInS">—</span></div>
@@ -384,6 +397,19 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
       watch(col, fn) { (subs[col] = subs[col] || []).push(fn); fn(data[col].slice()); },
       async add(col, doc) { data[col].push({ id: Math.random().toString(36).slice(2), ...doc }); save(); emit(col); },
       async del(col, id) { data[col] = data[col].filter((d) => d.id !== id); save(); emit(col); },
+      dump() { return JSON.parse(JSON.stringify(data)); },
+      // Junta o backup com o que já existe; o mesmo id é substituído.
+      async importAll(obj) {
+        let n = 0;
+        for (const col of COLS) {
+          if (!Array.isArray(obj[col])) continue;
+          const byId = new Map(data[col].map((d) => [d.id, d]));
+          for (const d of obj[col]) if (d && typeof d.id === "string") { byId.set(d.id, d); n++; }
+          data[col] = [...byId.values()];
+        }
+        save(); COLS.forEach(emit);
+        return n;
+      },
     };
   }
   function dbStore(db) {
@@ -660,6 +686,26 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     }
   });
 
+  // ---------- backup (só quando os dados ficam no aparelho) ----------
+  $("expBtn").onclick = () => {
+    if (!store || !store.dump) return;
+    const blob = new Blob([JSON.stringify({ app: "meu-caixa", versao: 1, ...store.dump() })], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `meu-caixa-backup-${todayISO()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast("bkToast", "Backup exportado.");
+  };
+  $("impFile").onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f || !store || !store.importAll) return;
+    try {
+      const obj = JSON.parse(await f.text());
+      const n = await store.importAll(obj);
+      toast("bkToast", n ? `${n} registros importados.` : "O arquivo não tem registros do Meu Caixa.", !n);
+    } catch (err) { toast("bkToast", "Não consegui ler esse arquivo. Escolha um backup do Meu Caixa (.json).", true); }
+  };
+
   // ---------- inicialização ----------
   function start(s, local) {
     store = s;
@@ -683,5 +729,6 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 })();
 </script>
 
+<script>if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");</script>
 </body>
 </html>
