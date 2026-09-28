@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Meu Caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: faixa de resumo do mês no topo; abaixo, coluna de lançamento (formulários em abas) à esquerda e extrato + devedores + proventos à direita. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --surface-2: #e9eeec;
+  --fg: #16201d;
+  --muted: #5b6964;
+  --line: #d5ddda;
+  --accent: #0f6b4f;
+  --accent-soft: #d8ede5;
+  --on-accent: #ffffff;
+  --out: #b3412e;
+  --out-soft: #f6e1dc;
+  --in: #0f7a55;
+  --owe: #8a5a00;
+  --owe-soft: #f5ead2;
+  --cat-fixa: #3d5a80;
+  --cat-lazer: #9a4fb0;
+  --cat-alim: #c2701c;
+  --cat-outros: #6b7a75;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1513; --surface: #161e1b; --surface-2: #1d2724; --fg: #e4ebe8; --muted: #93a39d; --line: #2a3632;
+    --accent: #4cc39a; --accent-soft: #173a2e; --on-accent: #07140f; --out: #f08a74; --out-soft: #3a1f19;
+    --in: #5fd3a8; --owe: #e0b35a; --owe-soft: #3a2d12;
+    --cat-fixa: #7fa3d1; --cat-lazer: #c98ddc; --cat-alim: #e7a25a; --cat-outros: #98a8a2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1513; --surface: #161e1b; --surface-2: #1d2724; --fg: #e4ebe8; --muted: #93a39d; --line: #2a3632;
+  --accent: #4cc39a; --accent-soft: #173a2e; --on-accent: #07140f; --out: #f08a74; --out-soft: #3a1f19;
+  --in: #5fd3a8; --owe: #e0b35a; --owe-soft: #3a2d12;
+  --cat-fixa: #7fa3d1; --cat-lazer: #c98ddc; --cat-alim: #e7a25a; --cat-outros: #98a8a2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: 1.9rem; font-weight: 700; }
+h2 { font-size: 1.15rem; font-weight: 700; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* topo */
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.top p { margin: 4px 0 0; color: var(--muted); }
+.month { display: flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.month button { border: 0; background: transparent; color: var(--fg); width: 34px; height: 34px; border-radius: 50%; font-size: 1.1rem; }
+.month button:hover { background: var(--surface-2); }
+.month strong { font-family: var(--font-display); min-width: 150px; text-align: center; text-transform: capitalize; }
+
+.notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
+
+/* resumo */
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.stat { padding: 16px 18px; display: grid; gap: 4px; border-left: 1px solid var(--line); min-width: 0; }
+.stat:first-child { border-left: 0; }
+.stat .v { font-family: var(--font-mono); font-size: 1.45rem; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .s { font-size: 0.82rem; color: var(--muted); }
+.v.in { color: var(--in); } .v.out { color: var(--out); } .v.owe { color: var(--owe); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.col { display: grid; gap: 20px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* abas do formulário */
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 8px; }
+.tabs button { border: 0; background: transparent; color: var(--muted); padding: 8px 2px; border-radius: 6px; font-weight: 600; font-size: 0.84rem; }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.card-swatch { display: inline-block; width: 22px; height: 15px; border-radius: 3px; vertical-align: -3px; margin-right: 6px; }
+.colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.colors label { position: relative; }
+.colors input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.colors span { display: block; width: 30px; height: 22px; border-radius: 5px; border: 2px solid transparent; }
+.colors input:checked + span { border-color: var(--fg); box-shadow: inset 0 0 0 2px var(--surface); }
+.colors input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cardlist { display: grid; gap: 8px; }
+.cardrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.cardrow .t { font-weight: 600; overflow-wrap: anywhere; }
+.cardrow .meta { margin-top: 0; }
+form { display: grid; gap: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field > span { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+input, select { font: inherit; width: 100%; padding: 9px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); min-width: 0; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips label { position: relative; }
+.chips input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.chips span { display: inline-block; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line); font-size: 0.86rem; font-weight: 500; }
+.chips input:checked + span { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.hint { font-size: 0.82rem; color: var(--muted); margin: 0; }
+.hint b { font-family: var(--font-mono); color: var(--fg); font-weight: 500; }
+.primary { border: 0; background: var(--accent); color: var(--on-accent); padding: 11px; border-radius: 8px; font-weight: 600; }
+.primary:hover { filter: brightness(1.07); }
+.toast { font-size: 0.86rem; color: var(--in); min-height: 1.3em; margin: 0; }
+.toast.err { color: var(--out); }
+
+/* categorias */
+.bars { display: grid; gap: 10px; }
+.bar { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 0.88rem; }
+.bar > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .track { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 5px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+/* extrato */
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 7px; padding: 3px; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 4px 10px; border-radius: 5px; font-size: 0.84rem; font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); }
+.list { display: grid; }
+.item { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+.item:first-child { border-top: 0; }
+.date { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); line-height: 1.2; }
+.date b { display: block; font-size: 1.05rem; color: var(--fg); font-weight: 500; }
+.who { min-width: 0; }
+.who .t { font-weight: 600; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.8rem; color: var(--muted); margin-top: 2px; align-items: center; }
+.pill { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; background: var(--surface-2); color: var(--fg); }
+.pill.owe { background: var(--owe-soft); color: var(--owe); }
+.amt { text-align: right; display: grid; gap: 2px; justify-items: end; }
+.amt .a { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+.amt .a.out { color: var(--out); } .amt .a.in { color: var(--in); }
+.amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.del.arm { color: var(--out); font-weight: 600; }
+.empty { padding: 18px; text-align: center; color: var(--muted); font-size: 0.9rem; border: 1px dashed var(--line); border-radius: 8px; }
+
+/* devedores */
+.debtors { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.debtor { border: 1px solid var(--line); border-radius: 9px; padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.debtor .n { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.debtor .big { font-family: var(--font-mono); font-size: 1.35rem; color: var(--owe); font-variant-numeric: tabular-nums; }
+.debtor .big.zero { color: var(--in); }
+.debtor dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 0.82rem; }
+.debtor dt { color: var(--muted); } .debtor dd { margin: 0; font-family: var(--font-mono); text-align: right; }
+.ghost { border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 7px; padding: 6px 10px; font-size: 0.84rem; font-weight: 600; }
+.ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.foot { font-size: 0.8rem; color: var(--muted); text-align: center; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:nth-child(3) { border-left: 0; }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 420px) {
+  .row2 { grid-template-columns: 1fr; }
+  .bar { grid-template-columns: 86px minmax(0, 1fr) auto; }
+  .stat .v { font-size: 1.15rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fill { transition: width 0.35s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Meu Caixa</h1>
+      <p>Gastos do cartão, parcelas, proventos e quem está te devendo.</p>
+    </div>
+    <div class="month" role="group" aria-label="Mês de referência">
+      <button id="prevMonth" aria-label="Mês anterior">‹</button>
+      <strong id="monthLabel">—</strong>
+      <button id="nextMonth" aria-label="Próximo mês">›</button>
+    </div>
+  </header>
+
+  <div class="notice" id="localNotice" hidden>
+    <span>Os dados estão sendo salvos só neste navegador.</span>
+  </div>
+
+  <section class="summary" aria-label="Resumo do mês">
+    <div class="stat"><span class="label">Proventos do mês</span><span class="v in num" id="sumIn">R$ 0,00</span><span class="s" id="sumInS">—</span></div>
+    <div class="stat"><span class="label">Fatura do mês</span><span class="v out num" id="sumCard">R$ 0,00</span><span class="s" id="sumCardS">—</span></div>
+    <div class="stat"><span class="label">Sobra (seu gasto)</span><span class="v num" id="sumNet">R$ 0,00</span><span class="s" id="sumNetS">proventos − seus gastos</span></div>
+    <div class="stat"><span class="label">Te devem (total)</span><span class="v owe num" id="sumOwe">R$ 0,00</span><span class="s" id="sumOweS">—</span></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-label="Novo lançamento">
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-gasto" aria-selected="true" data-tab="gasto">Gasto</button>
+          <button role="tab" id="tab-provento" aria-selected="false" data-tab="provento">Provento</button>
+          <button role="tab" id="tab-pagamento" aria-selected="false" data-tab="pagamento">Me pagaram</button>
+          <button role="tab" id="tab-cartoes" aria-selected="false" data-tab="cartoes">Cartões</button>
+        </div>
+
+        <form id="fGasto" data-pane="gasto" autocomplete="off">
+          <label class="field"><span>Marca / estabelecimento</span><input id="gMarca" required placeholder="Onde foi a compra"></label>
+          <div class="row2">
+            <label class="field"><span>Data da compra</span><input id="gData" type="date" required></label>
+            <label class="field"><span>Valor total (R$)</span><input id="gValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
+          </div>
+          <div class="field">
+            <span>Categoria</span>
+            <div class="chips" id="gCat">
+              <label><input type="radio" name="cat" id="cat-fixa" value="Despesa fixa" checked><span>Despesa fixa</span></label>
+              <label><input type="radio" name="cat" id="cat-lazer" value="Lazer"><span>Lazer</span></label>
+              <label><input type="radio" name="cat" id="cat-alim" value="Alimentação"><span>Alimentação</span></label>
+              <label><input type="radio" name="cat" id="cat-outros" value="Outros"><span>Outros</span></label>
+            </div>
+          </div>
+          <div class="row2">
+            <label class="field"><span>Cartão usado</span>
+              <select id="gCartao"></select>
+            </label>
+            <label class="field"><span>Parcelas</span>
+              <select id="gParc"></select>
+            </label>
+          </div>
+          <label class="field"><span>Entra na fatura de</span>
+            <select id="gFatura"><option value="0">mês da compra</option><option value="1">mês seguinte</option></select>
+          </label>
+          <p class="hint" id="gHint">À vista.</p>
+          <label class="check"><input type="checkbox" id="gOutro"> Outra pessoa usou meu cartão</label>
+          <label class="field" id="gPessoaWrap" hidden><span>Nome da pessoa</span><input id="gPessoa" list="pessoasList" placeholder="Quem usou o cartão"></label>
+          <button class="primary" type="submit">Adicionar gasto</button>
+          <p class="toast" id="gToast" role="status"></p>
+        </form>
+
+        <form id="fProv" data-pane="provento" hidden autocomplete="off">
+          <label class="field"><span>Descrição</span><input id="pDesc" required placeholder="Salário, 13º, freela…"></label>
+          <label class="field"><span>Tipo</span>
+            <select id="pTipo"><option>Salário</option><option>Extra / freela</option><option>Benefício</option><option>Rendimento</option><option>Outros</option></select>
+          </label>
+          <div class="row2">
+            <label class="field"><span>Data</span><input id="pData" type="date" required></label>
+            <label class="field"><span>Valor (R$)</span><input id="pValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
+          </div>
+          <button class="primary" type="submit">Adicionar provento</button>
+          <p class="toast" id="pToast" role="status"></p>
+        </form>
+
+        <form id="fPag" data-pane="pagamento" hidden autocomplete="off">
+          <p class="hint">Registre quando alguém te devolver dinheiro. O valor sai do saldo que a pessoa te deve.</p>
+          <label class="field"><span>Quem pagou</span><input id="qPessoa" list="pessoasList" required placeholder="Nome da pessoa"></label>
+          <div class="row2">
+            <label class="field"><span>Data</span><input id="qData" type="date" required></label>
+            <label class="field"><span>Valor (R$)</span><input id="qValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
+          </div>
+          <label class="field"><span>Observação (opcional)</span><input id="qObs" placeholder="Pix, dinheiro…"></label>
+          <button class="primary" type="submit">Registrar pagamento</button>
+          <p class="toast" id="qToast" role="status"></p>
+        </form>
+
+        <form id="fCartao" data-pane="cartoes" hidden autocomplete="off">
+          <p class="hint">Cadastre seus cartões para escolher qual foi usado em cada gasto. Não coloque o número do cartão, só um nome para reconhecer.</p>
+          <label class="field"><span>Nome do cartão</span><input id="cNome" required maxlength="40" placeholder="Nubank, Itaú, Inter…"></label>
+          <div class="row2">
+            <label class="field"><span>Bandeira</span>
+              <select id="cBandeira"><option>Mastercard</option><option>Visa</option><option>Elo</option><option>American Express</option><option>Hipercard</option><option>Outra</option></select>
+            </label>
+            <label class="field"><span>Dia do vencimento</span><input id="cVenc" type="number" min="1" max="31" inputmode="numeric"></label>
+          </div>
+          <div class="field"><span>Cor</span>
+            <div class="colors" id="cCores"></div>
+          </div>
+          <button class="primary" type="submit">Cadastrar cartão</button>
+          <p class="toast" id="cToast" role="status"></p>
+          <div class="cardlist" id="cardList"></div>
+        </form>
+        <datalist id="pessoasList"></datalist>
+      </section>
+
+      <section class="panel" aria-label="Gastos por categoria">
+        <div class="panel-head"><h2>Por categoria</h2><span class="label" id="catMonth"></span></div>
+        <div class="bars" id="bars"></div>
+      </section>
+
+      <section class="panel" aria-label="Fatura por cartão">
+        <div class="panel-head"><h2>Fatura por cartão</h2><span class="label" id="cardMonth"></span></div>
+        <div class="bars" id="cardBars"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-label="Quem me deve">
+        <div class="panel-head"><h2>Quem me deve</h2><span class="label">saldo em aberto</span></div>
+        <div class="debtors" id="debtors"></div>
+      </section>
+
+      <section class="panel" aria-label="Gastos">
+        <div class="panel-head">
+          <h2>Gastos</h2>
+          <div class="seg" role="group" aria-label="Filtro">
+            <button id="vMes" aria-pressed="true">Neste mês</button>
+            <button id="vTodos" aria-pressed="false">Todas as compras</button>
+          </div>
+        </div>
+        <div class="list" id="gastosList"></div>
+      </section>
+
+      <section class="panel" aria-label="Proventos">
+        <div class="panel-head"><h2>Proventos</h2><span class="label" id="provMonth"></span></div>
+        <div class="list" id="provList"></div>
+      </section>
+
+      <section class="panel" aria-label="Pagamentos recebidos">
+        <div class="panel-head"><h2>Pagamentos recebidos</h2><span class="label">todos</span></div>
+        <div class="list" id="pagList"></div>
+      </section>
+    </div>
+  </div>
+  <p class="foot" id="foot">Carregando seus dados…</p>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const money = (v) => BRL.format(v || 0);
+  const MONTHS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const MON3 = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const CATS = [
+    { k: "Despesa fixa", c: "var(--cat-fixa)" },
+    { k: "Lazer", c: "var(--cat-lazer)" },
+    { k: "Alimentação", c: "var(--cat-alim)" },
+    { k: "Outros", c: "var(--cat-outros)" },
+  ];
+  const catColor = (k) => (CATS.find((c) => c.k === k) || CATS[3]).c;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+  const keyName = (s) => String(s || "").trim().toLocaleLowerCase("pt-BR");
+  const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const monthIndex = (iso) => { const [y, m] = iso.split("-").map(Number); return y * 12 + (m - 1); };
+  const ymOf = (i) => `${Math.floor(i / 12)}-${String(i % 12 + 1).padStart(2, "0")}`;
+  // Mês da fatura em que cai a 1ª parcela (campo "mes"); sem ele, o mês da compra.
+  const startMonth = (g) => (typeof g.mes === "string" && /^\d{4}-\d{2}$/.test(g.mes) ? monthIndex(g.mes) : monthIndex(g.data));
+  const cents = (v) => Math.round(v * 100);
+
+  // Valor de cada parcela, com o resto dos centavos na primeira.
+  function parcelaValor(g, k) {
+    const n = Math.max(1, g.parcelas | 0), tot = cents(g.valor), base = Math.floor(tot / n);
+    return (k === 0 ? tot - base * (n - 1) : base) / 100;
+  }
+
+  const CARD_COLORS = ["#1f4e8c", "#7a2e8e", "#c2410c", "#0f766e", "#b91c1c", "#3f3f46", "#ca8a04", "#be185d"];
+  const COLS = ["gastos", "proventos", "pagamentos", "cartoes"];
+  const state = { gastos: [], proventos: [], pagamentos: [], cartoes: [] };
+  const cardById = (id) => state.cartoes.find((c) => c.id === id);
+  const now = new Date();
+  let cur = now.getFullYear() * 12 + now.getMonth();
+  let view = "mes";
+
+  // ---------- armazenamento ----------
+  let store = null;
+  function localStore() {
+    const K = "meu-caixa-v1";
+    let data = { gastos: [], proventos: [], pagamentos: [], cartoes: [] };
+    try { const raw = localStorage.getItem(K); if (raw) data = Object.assign(data, JSON.parse(raw)); } catch (e) {}
+    const subs = {};
+    const save = () => { try { localStorage.setItem(K, JSON.stringify(data)); } catch (e) {} };
+    const emit = (col) => (subs[col] || []).forEach((fn) => fn(data[col].slice()));
+    return {
+      watch(col, fn) { (subs[col] = subs[col] || []).push(fn); fn(data[col].slice()); },
+      async add(col, doc) { data[col].push({ id: Math.random().toString(36).slice(2), ...doc }); save(); emit(col); },
+      async del(col, id) { data[col] = data[col].filter((d) => d.id !== id); save(); emit(col); },
+    };
+  }
+  function dbStore(db) {
+    return {
+      watch(col, fn) {
+        db.collection(col).onSnapshot(
+          (snap) => fn(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+          () => { $("foot").textContent = "A conexão com seus dados caiu. Recarregue a página."; }
+        );
+      },
+      async add(col, doc) { await db.collection(col).add(doc); },
+      async del(col, id) { await db.collection(col).doc(id).delete(); },
+    };
+  }
+
+  // ---------- cálculos ----------
+  function parcelasNoMes(m) {
+    const out = [];
+    for (const g of state.gastos) {
+      const n = Math.max(1, g.parcelas | 0), k = m - startMonth(g);
+      if (k >= 0 && k < n) out.push({ g, k, n, v: parcelaValor(g, k) });
+    }
+    return out.sort((a, b) => b.g.data.localeCompare(a.g.data));
+  }
+  function devedores(m) {
+    const map = new Map();
+    const get = (nome) => {
+      const k = keyName(nome);
+      if (!map.has(k)) map.set(k, { nome: String(nome).trim(), compras: 0, pago: 0, mes: 0, qtd: 0 });
+      return map.get(k);
+    };
+    for (const g of state.gastos) if (g.pessoa && g.pessoa.trim()) { const d = get(g.pessoa); d.compras += g.valor; d.qtd++; }
+    for (const p of state.pagamentos) if (p.pessoa && p.pessoa.trim()) get(p.pessoa).pago += p.valor;
+    for (const it of parcelasNoMes(m)) if (it.g.pessoa && it.g.pessoa.trim()) get(it.g.pessoa).mes += it.v;
+    return [...map.values()].map((d) => ({ ...d, saldo: Math.round((d.compras - d.pago) * 100) / 100 }))
+      .sort((a, b) => b.saldo - a.saldo || a.nome.localeCompare(b.nome));
+  }
+
+  // ---------- render ----------
+  function dateCell(iso) {
+    const [y, m, d] = iso.split("-");
+    return `<div class="date"><b>${d}</b>${MON3[+m - 1]} ${y.slice(2)}</div>`;
+  }
+  function delBtn(col, id) { return `<button type="button" class="del" data-del="${col}" data-id="${esc(id)}">excluir</button>`; }
+  function cardPill(g) {
+    if (!g.cartao) return "";
+    const c = cardById(g.cartao);
+    return `<span class="pill">${c ? `<i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}` : "cartão removido"}</span>`;
+  }
+
+  function render() {
+    const y = Math.floor(cur / 12), mo = cur % 12;
+    const mLabel = `${MONTHS[mo]} ${y}`;
+    $("monthLabel").textContent = mLabel;
+    $("catMonth").textContent = mLabel;
+    $("provMonth").textContent = mLabel;
+    $("cardMonth").textContent = mLabel;
+    renderCartoes();
+
+    const parc = parcelasNoMes(cur);
+    const provMes = state.proventos.filter((p) => monthIndex(p.data) === cur).sort((a, b) => b.data.localeCompare(a.data));
+    const totIn = provMes.reduce((s, p) => s + p.valor, 0);
+    const totCard = parc.reduce((s, it) => s + it.v, 0);
+    const totDeles = parc.filter((it) => it.g.pessoa).reduce((s, it) => s + it.v, 0);
+    const meu = totCard - totDeles;
+    const devs = devedores(cur);
+    const totOwe = devs.reduce((s, d) => s + Math.max(0, d.saldo), 0);
+
+    $("sumIn").textContent = money(totIn);
+    $("sumInS").textContent = provMes.length ? `${provMes.length} ${provMes.length === 1 ? "entrada" : "entradas"}` : "nenhuma entrada";
+    $("sumCard").textContent = money(totCard);
+    $("sumCardS").textContent = totDeles > 0 ? `${money(totDeles)} é de outras pessoas` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`;
+    const net = totIn - meu;
+    $("sumNet").textContent = money(net);
+    $("sumNet").className = "v num " + (net < 0 ? "out" : "in");
+    $("sumNetS").textContent = `seus gastos: ${money(meu)}`;
+    $("sumOwe").textContent = money(totOwe);
+    const nDev = devs.filter((d) => d.saldo > 0).length;
+    $("sumOweS").textContent = nDev ? `${nDev} ${nDev === 1 ? "pessoa" : "pessoas"}` : "ninguém deve nada";
+
+    // categorias
+    const byCat = CATS.map((c) => ({ ...c, v: parc.filter((it) => (it.g.categoria || "Outros") === c.k).reduce((s, it) => s + it.v, 0) }));
+    const max = Math.max(...byCat.map((c) => c.v), 0);
+    $("bars").innerHTML = max === 0
+      ? `<div class="empty">Nenhum gasto neste mês.</div>`
+      : byCat.map((c) => `<div class="bar"><span><i class="dot" style="background:${c.c}"></i>${c.k}</span>
+          <div class="track"><div class="fill" style="width:${(c.v / max * 100).toFixed(1)}%;background:${c.c}"></div></div>
+          <span class="num">${money(c.v)}</span></div>`).join("");
+
+    // fatura por cartão
+    const byCard = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome))
+      .map((c) => ({ nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
+    const semCartao = parc.filter((it) => !cardById(it.g.cartao)).reduce((s, it) => s + it.v, 0);
+    if (semCartao > 0) byCard.push({ nome: "Sem cartão", cor: "var(--cat-outros)", sub: "", v: semCartao });
+    const maxCard = Math.max(...byCard.map((c) => c.v), 0);
+    $("cardBars").innerHTML = state.cartoes.length === 0
+      ? `<div class="empty">Cadastre seus cartões na aba "Cartões" para ver a fatura de cada um.</div>`
+      : byCard.map((c) => `<div class="bar"><span title="${esc(c.sub)}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>
+          <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div>
+          <span class="num">${money(c.v)}</span></div>`).join("");
+
+    // devedores
+    $("debtors").innerHTML = devs.length === 0
+      ? `<div class="empty">Quando alguém usar seu cartão, marque "Outra pessoa usou meu cartão" no gasto. A pessoa aparece aqui com o valor que te deve.</div>`
+      : devs.map((d) => `<div class="debtor">
+          <div class="n">${esc(d.nome)}</div>
+          <div class="big${d.saldo <= 0 ? " zero" : ""}">${d.saldo <= 0 ? (d.saldo < 0 ? "Crédito " + money(-d.saldo) : "Quitado") : money(d.saldo)}</div>
+          <dl><dt>Compras (${d.qtd})</dt><dd>${money(d.compras)}</dd>
+              <dt>Já pagou</dt><dd>${money(d.pago)}</dd>
+              <dt>Parcelas neste mês</dt><dd>${money(d.mes)}</dd></dl>
+          ${d.saldo > 0 ? `<button class="ghost" data-pay="${esc(d.nome)}" data-val="${d.saldo}">Registrar pagamento</button>` : ""}
+        </div>`).join("");
+
+    // gastos
+    let rows;
+    if (view === "mes") {
+      rows = parc.map((it) => ({ g: it.g, label: it.n > 1 ? `parcela ${it.k + 1}/${it.n}` : "à vista", v: it.v, sub: it.n > 1 ? `total ${money(it.g.valor)}` : "" }));
+    } else {
+      rows = state.gastos.slice().sort((a, b) => b.data.localeCompare(a.data)).map((g) => {
+        const n = Math.max(1, g.parcelas | 0), s = startMonth(g);
+        const fat = n > 1 ? `fatura ${MON3[s % 12]}/${String(Math.floor(s / 12)).slice(2)} a ${MON3[(s + n - 1) % 12]}/${String(Math.floor((s + n - 1) / 12)).slice(2)}` : `fatura ${MON3[s % 12]}/${String(Math.floor(s / 12)).slice(2)}`;
+        return { g, label: (n > 1 ? `${n}x de ${money(parcelaValor(g, 1))} · ` : "à vista · ") + fat, v: g.valor, sub: "" };
+      });
+    }
+    $("gastosList").innerHTML = rows.length === 0
+      ? `<div class="empty">${view === "mes" ? "Nenhuma compra ou parcela cai neste mês." : "Nenhum gasto ainda. Use o formulário ao lado para lançar o primeiro."}</div>`
+      : rows.map((r) => `<div class="item">${dateCell(r.g.data)}
+          <div class="who"><div class="t">${esc(r.g.marca)}</div>
+            <div class="meta"><span><i class="dot" style="background:${catColor(r.g.categoria)}"></i>${esc(r.g.categoria || "Outros")}</span>
+              <span>${r.label}</span>
+              ${cardPill(r.g)}
+              ${r.g.pessoa ? `<span class="pill owe">${esc(r.g.pessoa)}</span>` : ""}</div></div>
+          <div class="amt"><span class="a out">− ${money(r.v)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ""}${delBtn("gastos", r.g.id)}</div>
+        </div>`).join("");
+
+    // proventos
+    $("provList").innerHTML = provMes.length === 0
+      ? `<div class="empty">Nenhum provento lançado neste mês. Use a aba "Provento" para registrar salário ou outras entradas.</div>`
+      : provMes.map((p) => `<div class="item">${dateCell(p.data)}
+          <div class="who"><div class="t">${esc(p.descricao)}</div><div class="meta"><span>${esc(p.tipo || "")}</span></div></div>
+          <div class="amt"><span class="a in">+ ${money(p.valor)}</span>${delBtn("proventos", p.id)}</div></div>`).join("");
+
+    // pagamentos
+    const pags = state.pagamentos.slice().sort((a, b) => b.data.localeCompare(a.data));
+    $("pagList").innerHTML = pags.length === 0
+      ? `<div class="empty">Nenhum pagamento recebido ainda.</div>`
+      : pags.map((p) => `<div class="item">${dateCell(p.data)}
+          <div class="who"><div class="t">${esc(p.pessoa)}</div><div class="meta">${p.obs ? `<span>${esc(p.obs)}</span>` : ""}</div></div>
+          <div class="amt"><span class="a in">+ ${money(p.valor)}</span>${delBtn("pagamentos", p.id)}</div></div>`).join("");
+
+    // nomes para autocompletar
+    const nomes = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
+    $("pessoasList").innerHTML = nomes.map((n) => `<option value="${esc(n)}"></option>`).join("");
+  }
+
+  function renderCartoes() {
+    const cards = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+    const gSel = $("gCartao"), prev = gSel.value;
+    gSel.innerHTML = cards.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join("")
+      + `<option value="">${cards.length ? "Outro / sem cartão" : "Nenhum cartão cadastrado"}</option>`;
+    gSel.value = cards.some((c) => c.id === prev) || prev === "" && gSel.dataset.touched ? prev : (cards[0] ? cards[0].id : "");
+
+    const uso = (id) => state.gastos.filter((g) => g.cartao === id).length;
+    $("cardList").innerHTML = cards.length === 0
+      ? `<div class="empty">Nenhum cartão cadastrado ainda.</div>`
+      : `<span class="label">Seus cartões</span>` + cards.map((c) => `<div class="cardrow">
+          <div><div class="t"><i class="card-swatch" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</div>
+            <div class="meta"><span>${esc(c.bandeira || "")}</span>${c.venc ? `<span>vence dia ${c.venc}</span>` : ""}<span>${uso(c.id)} ${uso(c.id) === 1 ? "gasto" : "gastos"}</span></div></div>
+          ${delBtn("cartoes", c.id)}</div>`).join("");
+  }
+
+  // ---------- interação ----------
+  $("prevMonth").onclick = () => { cur--; render(); };
+  $("nextMonth").onclick = () => { cur++; render(); };
+  $("vMes").onclick = () => { view = "mes"; $("vMes").setAttribute("aria-pressed", "true"); $("vTodos").setAttribute("aria-pressed", "false"); render(); };
+  $("vTodos").onclick = () => { view = "todos"; $("vTodos").setAttribute("aria-pressed", "true"); $("vMes").setAttribute("aria-pressed", "false"); render(); };
+
+  function showTab(t) {
+    document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    document.querySelectorAll("[data-pane]").forEach((f) => (f.hidden = f.dataset.pane !== t));
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+
+  const sel = $("gParc");
+  sel.innerHTML = Array.from({ length: 24 }, (_, i) => `<option value="${i + 1}">${i === 0 ? "À vista (1x)" : i + 1 + "x"}</option>`).join("");
+  function updHint() {
+    const v = parseFloat($("gValor").value), n = +sel.value;
+    const d = $("gData").value;
+    const s = d ? monthIndex(d) + +$("gFatura").value : null;
+    const fat = s !== null ? ` na fatura de ${MONTHS[s % 12]}` : "";
+    if (n === 1) { $("gHint").textContent = `À vista: entra inteiro${fat}.`; return; }
+    $("gHint").innerHTML = (v > 0 ? `${n} parcelas de <b>${money(parcelaValor({ valor: v, parcelas: n }, 1))}</b>` : `${n} parcelas mensais`) + `, começando${fat}.`;
+  }
+  function updFatura() {
+    const d = $("gData").value; if (!d) return;
+    const m = monthIndex(d);
+    $("gFatura").options[0].textContent = `${MONTHS[m % 12]} (mês da compra)`;
+    $("gFatura").options[1].textContent = `${MONTHS[(m + 1) % 12]} (mês seguinte)`;
+    updHint();
+  }
+  sel.onchange = updHint; $("gValor").oninput = updHint; $("gFatura").onchange = updHint; $("gData").addEventListener("input", updFatura);
+  $("gOutro").onchange = () => { $("gPessoaWrap").hidden = !$("gOutro").checked; $("gPessoa").required = $("gOutro").checked; };
+
+  ["gData", "pData", "qData"].forEach((id) => ($(id).value = todayISO()));
+  updFatura();
+
+  function toast(id, msg, err) { const el = $(id); el.textContent = msg; el.className = "toast" + (err ? " err" : ""); clearTimeout(el._t); el._t = setTimeout(() => (el.textContent = ""), 3500); }
+  async function save(col, doc, toastId, okMsg, after) {
+    if (!store) { toast(toastId, "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
+    try { await store.add(col, doc); toast(toastId, okMsg); after && after(); }
+    catch (e) { toast(toastId, e && e.code === "quota_exceeded" ? "Limite de registros atingido. Apague lançamentos antigos para continuar." : "Não foi possível salvar. Verifique a conexão e tente de novo.", true); }
+  }
+
+  $("fGasto").onsubmit = (e) => {
+    e.preventDefault();
+    const outro = $("gOutro").checked;
+    const doc = {
+      marca: $("gMarca").value.trim(), data: $("gData").value,
+      categoria: document.querySelector('input[name="cat"]:checked').value,
+      parcelas: +sel.value, valor: Math.round(parseFloat($("gValor").value) * 100) / 100,
+      cartao: $("gCartao").value,
+      pessoa: outro ? $("gPessoa").value.trim() : "", criado: Date.now(),
+    };
+    if (!doc.marca || !doc.data || !(doc.valor > 0)) return;
+    doc.mes = ymOf(monthIndex(doc.data) + +$("gFatura").value);
+    if (outro && !doc.pessoa) { toast("gToast", "Informe o nome de quem usou o cartão.", true); return; }
+    save("gastos", doc, "gToast", `Gasto adicionado${doc.pessoa ? ` e lançado para ${doc.pessoa}` : ""}.`, () => {
+      $("gMarca").value = ""; $("gValor").value = ""; sel.value = "1"; $("gPessoa").value = "";
+      $("gOutro").checked = false; $("gPessoaWrap").hidden = true; $("gPessoa").required = false; updHint();
+      cur = startMonth(doc); render();
+    });
+  };
+  $("fProv").onsubmit = (e) => {
+    e.preventDefault();
+    const doc = { descricao: $("pDesc").value.trim(), tipo: $("pTipo").value, data: $("pData").value, valor: Math.round(parseFloat($("pValor").value) * 100) / 100, criado: Date.now() };
+    if (!doc.descricao || !(doc.valor > 0)) return;
+    save("proventos", doc, "pToast", "Provento adicionado.", () => { $("pDesc").value = ""; $("pValor").value = ""; cur = monthIndex(doc.data); render(); });
+  };
+  $("fPag").onsubmit = (e) => {
+    e.preventDefault();
+    const doc = { pessoa: $("qPessoa").value.trim(), data: $("qData").value, valor: Math.round(parseFloat($("qValor").value) * 100) / 100, obs: $("qObs").value.trim(), criado: Date.now() };
+    if (!doc.pessoa || !(doc.valor > 0)) return;
+    save("pagamentos", doc, "qToast", `Pagamento de ${doc.pessoa} registrado.`, () => { $("qPessoa").value = ""; $("qValor").value = ""; $("qObs").value = ""; });
+  };
+  $("gCartao").onchange = () => { $("gCartao").dataset.touched = "1"; };
+  $("cCores").innerHTML = CARD_COLORS.map((c, i) => `<label><input type="radio" name="cor" id="cor-${i}" value="${c}"${i === 0 ? " checked" : ""} aria-label="Cor ${i + 1}"><span style="background:${c}"></span></label>`).join("");
+  $("fCartao").onsubmit = (e) => {
+    e.preventDefault();
+    const venc = parseInt($("cVenc").value, 10);
+    const doc = { nome: $("cNome").value.trim(), bandeira: $("cBandeira").value, venc: venc >= 1 && venc <= 31 ? venc : null,
+      cor: document.querySelector('input[name="cor"]:checked').value, criado: Date.now() };
+    if (!doc.nome) return;
+    if (state.cartoes.some((c) => keyName(c.nome) === keyName(doc.nome))) { toast("cToast", "Já existe um cartão com esse nome.", true); return; }
+    save("cartoes", doc, "cToast", `Cartão ${doc.nome} cadastrado.`, () => { $("cNome").value = ""; $("cVenc").value = ""; });
+  };
+
+  document.addEventListener("click", async (e) => {
+    const pay = e.target.closest("[data-pay]");
+    if (pay) {
+      showTab("pagamento");
+      $("qPessoa").value = pay.dataset.pay; $("qValor").value = (+pay.dataset.val).toFixed(2);
+      $("qValor").focus(); $("fPag").scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+    const del = e.target.closest("[data-del]");
+    if (del && store) {
+      if (!del.classList.contains("arm")) {
+        document.querySelectorAll(".del.arm").forEach((b) => { b.classList.remove("arm"); b.textContent = "excluir"; });
+        del.classList.add("arm"); del.textContent = "confirmar exclusão";
+        setTimeout(() => { if (del.isConnected) { del.classList.remove("arm"); del.textContent = "excluir"; } }, 4000);
+        return;
+      }
+      try { await store.del(del.dataset.del, del.dataset.id); } catch (err) { $("foot").textContent = "Não foi possível excluir. Tente de novo."; }
+    }
+  });
+
+  // ---------- inicialização ----------
+  function start(s, local) {
+    store = s;
+    $("localNotice").hidden = !local;
+    for (const col of COLS) {
+      s.watch(col, (docs) => {
+        state[col] = col === "cartoes"
+          ? docs.filter((d) => d && typeof d.nome === "string")
+          : docs.filter((d) => d && typeof d.data === "string" && typeof d.valor === "number");
+        render();
+      });
+    }
+    $("foot").textContent = local ? "Salvo neste navegador." : "Salvo automaticamente. Só você vê estes dados.";
+  }
+  render();
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("db").then((db) => start(db ? dbStore(db) : localStore(), !db)).catch(() => start(localStore(), true));
+  } else {
+    start(localStore(), true);
+  }
+})();
+</script>
+
+</body>
+</html>
