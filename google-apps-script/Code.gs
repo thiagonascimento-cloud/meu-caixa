@@ -81,7 +81,11 @@ function aplicar(ops) {
       if (linhaDe[id]) sh.getRange(linhaDe[id], 1, 1, cols.length).setValues([linha]);
       else novas.push(linha);
     });
-    if (novas.length) sh.getRange(sh.getLastRow() + 1, 1, novas.length, cols.length).setValues(novas);
+    if (novas.length) {
+      const falta = sh.getLastRow() + novas.length - sh.getMaxRows();
+      if (falta > 0) sh.insertRowsAfter(sh.getMaxRows(), falta);
+      sh.getRange(sh.getLastRow() + 1, 1, novas.length, cols.length).setValues(novas);
+    }
     apagar.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
   });
 }

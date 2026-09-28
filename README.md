@@ -20,3 +20,7 @@ O app é um PWA: abra https://thiagonascimento-cloud.github.io/meu-caixa/ no Chr
 Como os dados ficam no aparelho, use **Exportar backup** para salvar um arquivo `.json` e **Importar backup** para carregar em outro aparelho.
 
 Política de privacidade: https://thiagonascimento-cloud.github.io/meu-caixa/privacidade.html
+
+## Sincronizar com Planilha Google
+
+Para ter os mesmos dados no iPhone, Android e computador, conecte uma Planilha Google sua. O código do Google está em [`google-apps-script/Code.gs`](google-apps-script/Code.gs); o passo a passo fica no próprio app, em **Sincronizar com Google**. A chave gerada fica só na sua conta Google e nos seus aparelhos.
