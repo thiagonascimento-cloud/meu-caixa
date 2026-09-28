@@ -419,12 +419,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
         r.onupgradeneeded = () => r.result.createObjectStore("kv");
         r.onsuccess = () => res(r.result);
         r.onerror = () => rej(r.error);
+        r.onblocked = () => rej(new Error("bloqueado"));
       });
+      this.conn.catch(() => { this.conn = null; });
       return this.conn;
     },
+    // Nunca deixa o app travado esperando o IndexedDB: depois de 1,5 s segue sem ele.
     async get(k) {
-      const db = await this.open();
-      return new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); });
+      const ler = this.open().then((db) => new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }));
+      return Promise.race([ler, new Promise((res) => setTimeout(() => res(undefined), 1500))]);
     },
     async set(k, v) {
       const db = await this.open();
@@ -897,6 +900,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     const url = doCodigo ? doCodigo.url : $("sUrl").value.trim(), chave = doCodigo ? doCodigo.chave : $("sChave").value.trim();
     if (!URL_OK.test(url)) { toast("sToast", "Cole o endereço do App da Web, que termina em /exec.", true); return; }
     if (chave.length < 8) { toast("sToast", "Cole a chave que apareceu no Apps Script.", true); return; }
+    if (!localBase) { toast("sToast", "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
     try { localStorage.setItem(SYNC_KEY, JSON.stringify({ url, chave })); } catch (err) {}
     store = syncStore(localBase, { url, chave });
     syncEstado = null; store.enviarTudo(); updStatus();
