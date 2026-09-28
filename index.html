@@ -78,6 +78,8 @@ button { font: inherit; cursor: pointer; }
 
 .backup { display: flex; gap: 8px; flex-wrap: wrap; }
 .backup label.ghost { cursor: pointer; }
+.notice.warn { background: var(--out-soft); }
+.notice:not(.warn) { background: var(--accent-soft); }
 .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
 
 /* resumo */
@@ -202,7 +204,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   </header>
 
   <div class="notice" id="localNotice" hidden>
-    <span>Seus dados ficam salvos só neste aparelho. Faça um backup de vez em quando.</span>
+    <span id="localMsg">Seus dados ficam salvos só neste aparelho. Faça um backup de vez em quando.</span>
     <span class="backup">
       <button type="button" class="ghost" id="expBtn">Exportar backup</button>
       <label class="ghost" for="impFile" id="impLbl">Importar backup</label>
@@ -386,18 +388,53 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 
   // ---------- armazenamento ----------
   let store = null;
-  function localStore() {
+  // Cópia dos dados no IndexedDB, além do localStorage: se um dos dois for limpo, o outro recupera.
+  const IDB = {
+    conn: null,
+    open() {
+      if (this.conn) return this.conn;
+      this.conn = new Promise((res, rej) => {
+        const r = indexedDB.open("meu-caixa", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("kv");
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      return this.conn;
+    },
+    async get(k) {
+      const db = await this.open();
+      return new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); });
+    },
+    async set(k, v) {
+      const db = await this.open();
+      return new Promise((res) => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
+    },
+  };
+  async function localStore() {
     const K = "meu-caixa-v1";
     let data = { gastos: [], proventos: [], pagamentos: [], cartoes: [] };
-    try { const raw = localStorage.getItem(K); if (raw) data = Object.assign(data, JSON.parse(raw)); } catch (e) {}
+    let fromLS = null, fromIDB = null;
+    try { const raw = localStorage.getItem(K); if (raw) fromLS = JSON.parse(raw); } catch (e) {}
+    try { fromIDB = await IDB.get(K); } catch (e) {}
+    const count = (d) => d ? COLS.reduce((s, c) => s + (Array.isArray(d[c]) ? d[c].length : 0), 0) : -1;
+    const best = [fromLS, fromIDB].filter(Boolean).sort((a, b) => (b.atualizado || 0) - (a.atualizado || 0) || count(b) - count(a))[0];
+    if (best) data = Object.assign(data, best);
     const subs = {};
-    const save = () => { try { localStorage.setItem(K, JSON.stringify(data)); } catch (e) {} };
+    const save = () => {
+      data.atualizado = Date.now();
+      try { localStorage.setItem(K, JSON.stringify(data)); } catch (e) {}
+      IDB.set(K, data).catch(() => {});
+    };
+    if (best && (!fromLS || !fromIDB)) save();
     const emit = (col) => (subs[col] || []).forEach((fn) => fn(data[col].slice()));
     return {
       watch(col, fn) { (subs[col] = subs[col] || []).push(fn); fn(data[col].slice()); },
       async add(col, doc) { data[col].push({ id: Math.random().toString(36).slice(2), ...doc }); save(); emit(col); },
       async del(col, id) { data[col] = data[col].filter((d) => d.id !== id); save(); emit(col); },
-      dump() { return JSON.parse(JSON.stringify(data)); },
+      dump() { const d = JSON.parse(JSON.stringify(data)); delete d.ultimoBackup; delete d.atualizado; return d; },
+      marcarBackup() { data.ultimoBackup = Date.now(); save(); },
+      ultimoBackup() { return data.ultimoBackup || 0; },
+      total() { return count(data); },
       // Junta o backup com o que já existe; o mesmo id é substituído.
       async importAll(obj) {
         let n = 0;
@@ -694,8 +731,30 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     a.href = URL.createObjectURL(blob); a.download = `meu-caixa-backup-${todayISO()}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast("bkToast", "Backup exportado.");
+    store.marcarBackup(); updStatus();
+    toast("bkToast", "Backup exportado. Guarde o arquivo no Google Drive ou no e-mail.");
   };
+
+  // Aviso de proteção dos dados neste aparelho.
+  let persistido = null;
+  function updStatus() {
+    if (!store || !store.ultimoBackup) return;
+    const ub = store.ultimoBackup(), dias = ub ? Math.floor((Date.now() - ub) / 864e5) : null;
+    const bk = ub ? `Último backup: ${new Date(ub).toLocaleDateString("pt-BR")}.` : "Você ainda não fez backup.";
+    const prot = persistido
+      ? "Os dados estão protegidos neste aparelho."
+      : "Atenção: este navegador pode apagar os dados. Abra o app pelo Chrome (não pelo WhatsApp ou aba anônima) e toque em ⋮ → Instalar app.";
+    $("localMsg").textContent = `${prot} ${bk}`;
+    $("localNotice").classList.toggle("warn", !persistido || (store.total() > 0 && (dias === null || dias >= 7)));
+  }
+  async function pedirProtecao() {
+    try {
+      if (!navigator.storage || !navigator.storage.persisted) { persistido = false; return updStatus(); }
+      persistido = await navigator.storage.persisted();
+      if (!persistido && navigator.storage.persist) persistido = await navigator.storage.persist();
+    } catch (e) { persistido = false; }
+    updStatus();
+  }
   $("impFile").onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = "";
     if (!f || !store || !store.importAll) return;
@@ -718,13 +777,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
         render();
       });
     }
-    $("foot").textContent = local ? "Salvo neste navegador." : "Salvo automaticamente. Só você vê estes dados.";
+    $("foot").textContent = local ? "Salvo automaticamente neste aparelho." : "Salvo automaticamente. Só você vê estes dados.";
+    if (local) pedirProtecao();
   }
+  // Pede proteção de novo depois de cada lançamento, enquanto o navegador não tiver concedido.
+  document.addEventListener("submit", () => { if (store && store.dump && !persistido) setTimeout(pedirProtecao, 500); });
+  const startLocal = async () => { try { start(await localStore(), true); } catch (e) { $("foot").textContent = "Este navegador não permite salvar dados. Abra pelo Chrome."; } };
   render();
   if (window.claude && typeof window.claude.use === "function") {
-    window.claude.use("db").then((db) => start(db ? dbStore(db) : localStore(), !db)).catch(() => start(localStore(), true));
+    window.claude.use("db").then((db) => (db ? start(dbStore(db), false) : startLocal())).catch(startLocal);
   } else {
-    start(localStore(), true);
+    startLocal();
   }
 })();
 </script>
