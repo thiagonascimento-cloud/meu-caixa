@@ -78,6 +78,8 @@ button { font: inherit; cursor: pointer; }
 
 .backup { display: flex; gap: 8px; flex-wrap: wrap; }
 .backup label.ghost { cursor: pointer; }
+.syncform { flex-basis: 100%; display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.syncform .primary { padding: 8px 16px; }
 .notice.warn { background: var(--out-soft); }
 .notice:not(.warn) { background: var(--accent-soft); }
 .notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-radius: var(--r); background: var(--owe-soft); color: var(--fg); font-size: 0.9rem; }
@@ -209,7 +211,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
       <button type="button" class="ghost" id="expBtn">Exportar backup</button>
       <label class="ghost" for="impFile" id="impLbl">Importar backup</label>
       <input type="file" id="impFile" accept="application/json,.json" hidden>
+      <button type="button" class="ghost" id="syncBtn">Sincronizar com Google</button>
     </span>
+    <form id="syncForm" class="syncform" hidden autocomplete="off">
+      <label class="field"><span>Endereço do App da Web (termina em /exec)</span><input id="sUrl" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label class="field"><span>Chave</span><input id="sChave" autocapitalize="off" spellcheck="false"></label>
+      <div class="backup"><button class="primary" type="submit">Conectar</button><button type="button" class="ghost" id="sOff" hidden>Desconectar</button></div>
+      <p class="toast" id="sToast" role="status"></p>
+    </form>
   </div>
   <p class="toast" id="bkToast" role="status"></p>
 
@@ -429,7 +438,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     const emit = (col) => (subs[col] || []).forEach((fn) => fn(data[col].slice()));
     return {
       watch(col, fn) { (subs[col] = subs[col] || []).push(fn); fn(data[col].slice()); },
-      async add(col, doc) { data[col].push({ id: Math.random().toString(36).slice(2), ...doc }); save(); emit(col); },
+      async add(col, doc) { const id = doc.id || Math.random().toString(36).slice(2); data[col].push({ ...doc, id }); save(); emit(col); return id; },
+      replaceAll(obj) { for (const col of COLS) data[col] = Array.isArray(obj[col]) ? obj[col] : []; save(); COLS.forEach(emit); },
+      applyOps(ops) {
+        for (const o of ops) {
+          if (!COLS.includes(o.col)) continue;
+          const id = o.op === "del" ? o.id : o.doc.id;
+          data[o.col] = data[o.col].filter((d) => d.id !== id);
+          if (o.op === "set") data[o.col].push(o.doc);
+        }
+        save(); COLS.forEach(emit);
+      },
       async del(col, id) { data[col] = data[col].filter((d) => d.id !== id); save(); emit(col); },
       dump() { const d = JSON.parse(JSON.stringify(data)); delete d.ultimoBackup; delete d.atualizado; return d; },
       marcarBackup() { data.ultimoBackup = Date.now(); save(); },
@@ -447,6 +466,49 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
         save(); COLS.forEach(emit);
         return n;
       },
+    };
+  }
+  // Sincronização com a Planilha Google (Apps Script). O aparelho continua sendo o cache:
+  // cada alteração entra numa fila salva no aparelho e é enviada quando há internet.
+  const SYNC_KEY = "meu-caixa-sync", FILA_KEY = "meu-caixa-fila";
+  let syncEstado = null, syncHora = null;
+  function lerSyncCfg() { try { const c = JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); return c && c.url && c.chave ? c : null; } catch (e) { return null; } }
+  function syncStore(local, cfg) {
+    let fila = [];
+    try { fila = JSON.parse(localStorage.getItem(FILA_KEY) || "[]"); } catch (e) {}
+    const salvaFila = () => { try { localStorage.setItem(FILA_KEY, JSON.stringify(fila)); } catch (e) {} };
+    let timer = null, rodando = false, deNovo = false;
+    const agenda = (ms = 800) => { clearTimeout(timer); timer = setTimeout(sync, ms); };
+    const enfileira = (ops) => { if (!ops.length) return; fila.push(...ops); salvaFila(); agenda(); };
+    async function sync() {
+      if (rodando) { deNovo = true; return; }
+      rodando = true; syncEstado = "sincronizando"; updStatus();
+      const envio = fila.slice();
+      try {
+        const r = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ chave: cfg.chave, ops: envio }) });
+        const j = await r.json();
+        if (!j.ok) throw Object.assign(new Error(j.erro || "falha"), { code: j.erro });
+        fila.splice(0, envio.length); salvaFila();
+        local.replaceAll(j.dados);
+        if (fila.length) local.applyOps(fila);
+        syncEstado = "ok"; syncHora = new Date();
+      } catch (e) { syncEstado = e.code === "chave" ? "chave" : "offline"; }
+      rodando = false; updStatus();
+      if (deNovo) { deNovo = false; agenda(100); }
+    }
+    return {
+      ...local,
+      async add(col, doc) { const id = await local.add(col, doc); enfileira([{ col, op: "set", doc: { ...doc, id } }]); return id; },
+      async del(col, id) { await local.del(col, id); enfileira([{ col, op: "del", id }]); },
+      async importAll(obj) {
+        const n = await local.importAll(obj);
+        enfileira(COLS.flatMap((col) => (Array.isArray(obj[col]) ? obj[col] : []).filter((d) => d && typeof d.id === "string").map((doc) => ({ col, op: "set", doc }))));
+        return n;
+      },
+      enviarTudo() { const d = local.dump(); enfileira(COLS.flatMap((col) => d[col].map((doc) => ({ col, op: "set", doc })))); if (!fila.length) agenda(50); },
+      pendentes: () => fila.length,
+      sync,
+      sincronizado: true,
     };
   }
   function dbStore(db) {
@@ -740,13 +802,56 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   function updStatus() {
     if (!store || !store.ultimoBackup) return;
     const ub = store.ultimoBackup(), dias = ub ? Math.floor((Date.now() - ub) / 864e5) : null;
+    $("syncBtn").textContent = store.sincronizado ? "Planilha Google" : "Sincronizar com Google";
+    if (store.sincronizado) {
+      const n = store.pendentes();
+      const hora = syncHora ? syncHora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+      const msg = {
+        ok: `Sincronizado com sua Planilha Google às ${hora}.`,
+        sincronizando: "Sincronizando com sua Planilha Google…",
+        chave: "A planilha recusou a chave. Toque em Planilha Google e confira a chave.",
+        offline: `Sem conexão com a planilha.${n ? ` ${n} ${n === 1 ? "alteração aguardando" : "alterações aguardando"}; envio quando a internet voltar.` : ""}`,
+      }[syncEstado] || "Conectando à sua Planilha Google…";
+      $("localMsg").textContent = msg;
+      $("localNotice").classList.toggle("warn", syncEstado === "chave" || (syncEstado === "offline" && n > 0));
+      return;
+    }
     const bk = ub ? `Último backup: ${new Date(ub).toLocaleDateString("pt-BR")}.` : "Você ainda não fez backup.";
     const prot = persistido
       ? "Os dados estão protegidos neste aparelho."
-      : "Atenção: este navegador pode apagar os dados. Abra o app pelo Chrome (não pelo WhatsApp ou aba anônima) e toque em ⋮ → Instalar app.";
-    $("localMsg").textContent = `${prot} ${bk}`;
+      : "Atenção: este navegador pode apagar os dados. Abra o app pelo Chrome ou Safari (não pelo WhatsApp ou aba anônima) e instale na tela inicial.";
+    $("localMsg").textContent = `${prot} ${bk} Para não perder nada e usar em vários aparelhos, conecte uma Planilha Google.`;
     $("localNotice").classList.toggle("warn", !persistido || (store.total() > 0 && (dias === null || dias >= 7)));
   }
+
+  // ---------- conexão com a planilha ----------
+  let localBase = null;
+  $("syncBtn").onclick = () => {
+    const f = $("syncForm"); f.hidden = !f.hidden;
+    const cfg = lerSyncCfg();
+    $("sUrl").value = cfg ? cfg.url : ""; $("sChave").value = cfg ? cfg.chave : "";
+    $("sOff").hidden = !cfg;
+    if (!f.hidden) $("sUrl").focus();
+  };
+  $("syncForm").onsubmit = (e) => {
+    e.preventDefault();
+    const url = $("sUrl").value.trim(), chave = $("sChave").value.trim();
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) { toast("sToast", "Cole o endereço do App da Web, que termina em /exec.", true); return; }
+    if (chave.length < 8) { toast("sToast", "Cole a chave que apareceu no Apps Script.", true); return; }
+    try { localStorage.setItem(SYNC_KEY, JSON.stringify({ url, chave })); } catch (err) {}
+    store = syncStore(localBase, { url, chave });
+    syncEstado = null; store.enviarTudo(); updStatus();
+    $("syncForm").hidden = true;
+    toast("bkToast", "Conectado. Enviando seus dados para a planilha…");
+  };
+  $("sOff").onclick = () => {
+    try { localStorage.removeItem(SYNC_KEY); localStorage.removeItem(FILA_KEY); } catch (err) {}
+    store = localBase; syncEstado = null; $("syncForm").hidden = true; updStatus();
+    toast("bkToast", "Desconectado da planilha. Os dados continuam neste aparelho.");
+  };
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && store && store.sync) store.sync(); });
+  window.addEventListener("online", () => { if (store && store.sync) store.sync(); });
+  setInterval(() => { if (document.visibilityState === "visible" && store && store.sync) store.sync(); }, 60000);
   async function pedirProtecao() {
     try {
       if (!navigator.storage || !navigator.storage.persisted) { persistido = false; return updStatus(); }
@@ -782,7 +887,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   }
   // Pede proteção de novo depois de cada lançamento, enquanto o navegador não tiver concedido.
   document.addEventListener("submit", () => { if (store && store.dump && !persistido) setTimeout(pedirProtecao, 500); });
-  const startLocal = async () => { try { start(await localStore(), true); } catch (e) { $("foot").textContent = "Este navegador não permite salvar dados. Abra pelo Chrome."; } };
+  const startLocal = async () => { try {
+      localBase = await localStore();
+      const cfg = lerSyncCfg();
+      start(cfg ? syncStore(localBase, cfg) : localBase, true);
+      if (cfg) store.sync();
+    } catch (e) { $("foot").textContent = "Este navegador não permite salvar dados. Abra pelo Chrome."; } };
   render();
   if (window.claude && typeof window.claude.use === "function") {
     window.claude.use("db").then((db) => (db ? start(dbStore(db), false) : startLocal())).catch(startLocal);
