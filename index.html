@@ -529,12 +529,27 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       return o && URL_OK.test(o.u) && typeof o.k === "string" && o.k.length >= 8 ? { url: o.u, chave: o.k } : null;
     } catch (e) { return null; }
   }
+  // A conexão fica em dois lugares (localStorage e IndexedDB): se o navegador limpar um, o outro recupera.
+  function guardarCfg(cfg) {
+    try { if (cfg) localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); else localStorage.removeItem(SYNC_KEY); } catch (e) {}
+    IDB.set(SYNC_KEY, cfg || null).catch(() => {});
+  }
+  async function recuperarCfg() {
+    const atual = lerSyncCfg();
+    let salvo = null;
+    try { salvo = await IDB.get(SYNC_KEY); } catch (e) {}
+    if (!atual && salvo && URL_OK.test(salvo.url) && typeof salvo.chave === "string") {
+      try { localStorage.setItem(SYNC_KEY, JSON.stringify({ url: salvo.url, chave: salvo.chave })); } catch (e) {}
+    } else if (atual && !(salvo && salvo.url === atual.url && salvo.chave === atual.chave)) {
+      IDB.set(SYNC_KEY, atual).catch(() => {});
+    }
+  }
   // Abriu pelo QR Code: guarda a conexão e tira o código do endereço.
   (function conectarPeloLink() {
     if (!location.hash.startsWith("#conectar=")) return;
     const cfg = lerCodigo(location.hash);
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
-    if (cfg) try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch (e) {}
+    if (cfg) guardarCfg(cfg);
   })();
   function lerSyncCfg() { try { const c = JSON.parse(localStorage.getItem(SYNC_KEY) || "null"); return c && c.url && c.chave ? c : null; } catch (e) { return null; } }
   function syncStore(local, cfg) {
@@ -1075,7 +1090,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (!URL_OK.test(url)) { toast("sToast", "Cole o endereço do App da Web, que termina em /exec.", true); return; }
     if (chave.length < 8) { toast("sToast", "Cole a chave que apareceu no Apps Script.", true); return; }
     if (!localBase) { toast("sToast", "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
-    try { localStorage.setItem(SYNC_KEY, JSON.stringify({ url, chave })); } catch (err) {}
+    guardarCfg({ url, chave });
     store = syncStore(localBase, { url, chave });
     syncEstado = null; store.enviarTudo(); updStatus();
     $("syncForm").hidden = true;
@@ -1083,7 +1098,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     setTimeout(mostrarPareamento, 400);
   };
   $("sOff").onclick = () => {
-    try { localStorage.removeItem(SYNC_KEY); localStorage.removeItem(FILA_KEY); } catch (err) {}
+    guardarCfg(null);
+    try { localStorage.removeItem(FILA_KEY); } catch (err) {}
     store = localBase; syncEstado = null; $("syncForm").hidden = true; updStatus();
     toast("bkToast", "Desconectado da planilha. Os dados continuam neste aparelho.");
   };
@@ -1127,6 +1143,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   document.addEventListener("submit", () => { if (store && store.dump && !persistido) setTimeout(pedirProtecao, 500); });
   const startLocal = async () => { try {
       localBase = await localStore();
+      await recuperarCfg();
       const cfg = lerSyncCfg();
       start(cfg ? syncStore(localBase, cfg) : localBase, true);
       if (cfg) store.sync();
