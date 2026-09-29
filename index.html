@@ -164,7 +164,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .a.out { color: var(--out); } .amt .a.in { color: var(--in); }
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-.del.arm { color: var(--out); font-weight: 600; }
+.acts { display: inline-flex; gap: 12px; }
+.formbtns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.formbtns .primary:only-child, .formbtns .primary:has(+ [hidden]) { grid-column: 1 / -1; }
+form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8px; margin: -8px; }
+.undo { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 30; display: flex; align-items: center; gap: 14px; background: var(--fg); color: var(--bg); padding: 10px 14px 10px 16px; border-radius: 10px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.25); max-width: calc(100% - 32px); font-size: 0.9rem; }
+.undo button { border: 0; background: transparent; color: var(--accent-soft); font-weight: 700; padding: 4px 6px; text-decoration: underline; text-underline-offset: 2px; }
 .empty { padding: 18px; text-align: center; color: var(--muted); font-size: 0.9rem; border: 1px dashed var(--line); border-radius: 8px; }
 
 /* devedores */
@@ -240,7 +245,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     <div class="stat"><span class="label">Proventos do mês</span><span class="v in num" id="sumIn">R$ 0,00</span><span class="s" id="sumInS">—</span></div>
     <div class="stat"><span class="label">Fatura do mês</span><span class="v out num" id="sumCard">R$ 0,00</span><span class="s" id="sumCardS">—</span></div>
     <div class="stat"><span class="label">Sobra (seu gasto)</span><span class="v num" id="sumNet">R$ 0,00</span><span class="s" id="sumNetS">proventos − seus gastos</span></div>
-    <div class="stat"><span class="label">Te devem (total)</span><span class="v owe num" id="sumOwe">R$ 0,00</span><span class="s" id="sumOweS">—</span></div>
+    <div class="stat"><span class="label">Te devem no mês</span><span class="v owe num" id="sumOwe">R$ 0,00</span><span class="s" id="sumOweS">—</span></div>
   </section>
 
   <div class="grid">
@@ -282,7 +287,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
           <p class="hint" id="gHint">À vista.</p>
           <label class="check"><input type="checkbox" id="gOutro"> Outra pessoa usou meu cartão</label>
           <label class="field" id="gPessoaWrap" hidden><span>Nome da pessoa</span><input id="gPessoa" list="pessoasList" placeholder="Quem usou o cartão"></label>
-          <button class="primary" type="submit">Adicionar gasto</button>
+          <div class="formbtns"><button class="primary" type="submit" id="gBtn">Adicionar gasto</button><button type="button" class="ghost" id="gCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="gToast" role="status"></p>
         </form>
 
@@ -295,7 +300,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
             <label class="field"><span>Data</span><input id="pData" type="date" required></label>
             <label class="field"><span>Valor (R$)</span><input id="pValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
           </div>
-          <button class="primary" type="submit">Adicionar provento</button>
+          <div class="formbtns"><button class="primary" type="submit" id="pBtn">Adicionar provento</button><button type="button" class="ghost" id="pCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="pToast" role="status"></p>
         </form>
 
@@ -307,7 +312,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
             <label class="field"><span>Valor (R$)</span><input id="qValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
           </div>
           <label class="field"><span>Observação (opcional)</span><input id="qObs" placeholder="Pix, dinheiro…"></label>
-          <button class="primary" type="submit">Registrar pagamento</button>
+          <div class="formbtns"><button class="primary" type="submit" id="qBtn">Registrar pagamento</button><button type="button" class="ghost" id="qCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="qToast" role="status"></p>
         </form>
 
@@ -323,7 +328,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
           <div class="field"><span>Cor</span>
             <div class="colors" id="cCores"></div>
           </div>
-          <button class="primary" type="submit">Cadastrar cartão</button>
+          <div class="formbtns"><button class="primary" type="submit" id="cBtn">Cadastrar cartão</button><button type="button" class="ghost" id="cCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="cToast" role="status"></p>
           <div class="cardlist" id="cardList"></div>
         </form>
@@ -343,7 +348,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 
     <div class="col">
       <section class="panel" aria-label="Quem me deve">
-        <div class="panel-head"><h2>Quem me deve</h2><span class="label">saldo em aberto</span></div>
+        <div class="panel-head"><h2>Quem me deve</h2><span class="label" id="oweMonth"></span></div>
         <div class="debtors" id="debtors"></div>
       </section>
 
@@ -371,6 +376,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   </div>
   <p class="foot" id="foot">Carregando seus dados…</p>
 </div>
+<div class="undo" id="undo" role="status" hidden><span id="undoMsg">Lançamento excluído.</span><button type="button" id="undoBtn">Desfazer</button></div>
 
 <script>
 (() => {
@@ -467,6 +473,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
         save(); COLS.forEach(emit);
       },
       async del(col, id) { data[col] = data[col].filter((d) => d.id !== id); save(); emit(col); },
+      async update(col, id, doc) { data[col] = data[col].map((d) => (d.id === id ? { ...doc, id } : d)); save(); emit(col); },
       dump() { const d = JSON.parse(JSON.stringify(data)); delete d.ultimoBackup; delete d.atualizado; return d; },
       marcarBackup() { data.ultimoBackup = Date.now(); save(); },
       ultimoBackup() { return data.ultimoBackup || 0; },
@@ -536,6 +543,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
       ...local,
       async add(col, doc) { const id = await local.add(col, doc); enfileira([{ col, op: "set", doc: { ...doc, id } }]); return id; },
       async del(col, id) { await local.del(col, id); enfileira([{ col, op: "del", id }]); },
+      async update(col, id, doc) { await local.update(col, id, doc); enfileira([{ col, op: "set", doc: { ...doc, id } }]); },
       async importAll(obj) {
         const n = await local.importAll(obj);
         enfileira(COLS.flatMap((col) => (Array.isArray(obj[col]) ? obj[col] : []).filter((d) => d && typeof d.id === "string").map((doc) => ({ col, op: "set", doc }))));
@@ -555,8 +563,12 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
           () => { $("foot").textContent = "A conexão com seus dados caiu. Recarregue a página."; }
         );
       },
-      async add(col, doc) { await db.collection(col).add(doc); },
+      async add(col, doc) {
+        if (doc.id) { const { id, ...rest } = doc; await db.collection(col).doc(id).set(rest); return id; }
+        const ref = await db.collection(col).add(doc); return ref.id;
+      },
       async del(col, id) { await db.collection(col).doc(id).delete(); },
+      async update(col, id, doc) { const { id: _ignora, ...rest } = doc; await db.collection(col).doc(id).set(rest); },
     };
   }
 
@@ -569,17 +581,17 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     }
     return out.sort((a, b) => b.g.data.localeCompare(a.g.data));
   }
+  // Quanto cada pessoa deve NO MÊS m: parcelas dela que caem no mês menos o que pagou com data no mês.
   function devedores(m) {
     const map = new Map();
     const get = (nome) => {
       const k = keyName(nome);
-      if (!map.has(k)) map.set(k, { nome: String(nome).trim(), compras: 0, pago: 0, mes: 0, qtd: 0 });
+      if (!map.has(k)) map.set(k, { nome: String(nome).trim(), devido: 0, pago: 0, qtd: 0 });
       return map.get(k);
     };
-    for (const g of state.gastos) if (g.pessoa && g.pessoa.trim()) { const d = get(g.pessoa); d.compras += g.valor; d.qtd++; }
-    for (const p of state.pagamentos) if (p.pessoa && p.pessoa.trim()) get(p.pessoa).pago += p.valor;
-    for (const it of parcelasNoMes(m)) if (it.g.pessoa && it.g.pessoa.trim()) get(it.g.pessoa).mes += it.v;
-    return [...map.values()].map((d) => ({ ...d, saldo: Math.round((d.compras - d.pago) * 100) / 100 }))
+    for (const it of parcelasNoMes(m)) if (it.g.pessoa && it.g.pessoa.trim()) { const d = get(it.g.pessoa); d.devido += it.v; d.qtd++; }
+    for (const p of state.pagamentos) if (p.pessoa && p.pessoa.trim() && monthIndex(p.data) === m) get(p.pessoa).pago += p.valor;
+    return [...map.values()].map((d) => ({ ...d, saldo: Math.round((d.devido - d.pago) * 100) / 100 }))
       .sort((a, b) => b.saldo - a.saldo || a.nome.localeCompare(b.nome));
   }
 
@@ -588,7 +600,9 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     const [y, m, d] = iso.split("-");
     return `<div class="date"><b>${d}</b>${MON3[+m - 1]} ${y.slice(2)}</div>`;
   }
-  function delBtn(col, id) { return `<button type="button" class="del" data-del="${col}" data-id="${esc(id)}">excluir</button>`; }
+  function delBtn(col, id) {
+    return `<span class="acts"><button type="button" class="del" data-edit="${col}" data-id="${esc(id)}">editar</button><button type="button" class="del" data-del="${col}" data-id="${esc(id)}">excluir</button></span>`;
+  }
   function cardPill(g) {
     if (!g.cartao) return "";
     const c = cardById(g.cartao);
@@ -623,7 +637,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     $("sumNetS").textContent = `seus gastos: ${money(meu)}`;
     $("sumOwe").textContent = money(totOwe);
     const nDev = devs.filter((d) => d.saldo > 0).length;
-    $("sumOweS").textContent = nDev ? `${nDev} ${nDev === 1 ? "pessoa" : "pessoas"}` : "ninguém deve nada";
+    $("sumOweS").textContent = nDev ? `${nDev} ${nDev === 1 ? "pessoa" : "pessoas"} em ${MONTHS[mo]}` : "ninguém deve nada no mês";
+    $("oweMonth").textContent = mLabel;
 
     // categorias
     const byCat = CATS.map((c) => ({ ...c, v: parc.filter((it) => (it.g.categoria || "Outros") === c.k).reduce((s, it) => s + it.v, 0) }));
@@ -648,13 +663,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 
     // devedores
     $("debtors").innerHTML = devs.length === 0
-      ? `<div class="empty">Quando alguém usar seu cartão, marque "Outra pessoa usou meu cartão" no gasto. A pessoa aparece aqui com o valor que te deve.</div>`
+      ? `<div class="empty">Ninguém te deve nada em ${MONTHS[mo]}. Quando alguém usar seu cartão, marque "Outra pessoa usou meu cartão" no gasto.</div>`
       : devs.map((d) => `<div class="debtor">
           <div class="n">${esc(d.nome)}</div>
-          <div class="big${d.saldo <= 0 ? " zero" : ""}">${d.saldo <= 0 ? (d.saldo < 0 ? "Crédito " + money(-d.saldo) : "Quitado") : money(d.saldo)}</div>
-          <dl><dt>Compras (${d.qtd})</dt><dd>${money(d.compras)}</dd>
-              <dt>Já pagou</dt><dd>${money(d.pago)}</dd>
-              <dt>Parcelas neste mês</dt><dd>${money(d.mes)}</dd></dl>
+          <div class="big${d.saldo <= 0 ? " zero" : ""}">${d.saldo > 0 ? money(d.saldo) : d.saldo < 0 ? "Pagou " + money(-d.saldo) + " a mais" : "Mês quitado"}</div>
+          <dl><dt>${d.qtd} ${d.qtd === 1 ? "parcela" : "parcelas"} no mês</dt><dd>${money(d.devido)}</dd>
+              <dt>Pagou no mês</dt><dd>${money(d.pago)}</dd>
+              <dt>Falta pagar</dt><dd>${money(Math.max(0, d.saldo))}</dd></dl>
           ${d.saldo > 0 ? `<button class="ghost" data-pay="${esc(d.nome)}" data-val="${d.saldo}">Registrar pagamento</button>` : ""}
         </div>`).join("");
 
@@ -741,8 +756,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   function updFatura() {
     const d = $("gData").value; if (!d) return;
     const m = monthIndex(d);
-    $("gFatura").options[0].textContent = `${MONTHS[m % 12]} (mês da compra)`;
-    $("gFatura").options[1].textContent = `${MONTHS[(m + 1) % 12]} (mês seguinte)`;
+    for (const o of $("gFatura").options) {
+      const v = +o.value, s = m + v;
+      const suf = v === 0 ? "mês da compra" : v === 1 ? "mês seguinte" : "como estava";
+      o.textContent = `${MONTHS[s % 12]}${v === 0 || v === 1 ? "" : " " + Math.floor(s / 12)} (${suf})`;
+    }
     updHint();
   }
   sel.onchange = updHint; $("gValor").oninput = updHint; $("gFatura").onchange = updHint; $("gData").addEventListener("input", updFatura);
@@ -752,9 +770,82 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
   updFatura();
 
   function toast(id, msg, err) { const el = $(id); el.textContent = msg; el.className = "toast" + (err ? " err" : ""); clearTimeout(el._t); el._t = setTimeout(() => (el.textContent = ""), 3500); }
+  // ---------- edição ----------
+  const EDIT = {
+    gastos: { form: "fGasto", tab: "gasto", btn: "gBtn", cancel: "gCancel", txt: "Adicionar gasto" },
+    proventos: { form: "fProv", tab: "provento", btn: "pBtn", cancel: "pCancel", txt: "Adicionar provento" },
+    pagamentos: { form: "fPag", tab: "pagamento", btn: "qBtn", cancel: "qCancel", txt: "Registrar pagamento" },
+    cartoes: { form: "fCartao", tab: "cartoes", btn: "cBtn", cancel: "cCancel", txt: "Cadastrar cartão" },
+  };
+  const editando = {};
+  function setEdit(col, id) {
+    editando[col] = id || null;
+    const c = EDIT[col];
+    $(c.btn).textContent = id ? "Salvar alterações" : c.txt;
+    $(c.cancel).hidden = !id;
+    $(c.form).classList.toggle("editing", !!id);
+  }
+  function limparGasto() {
+    $("gMarca").value = ""; $("gValor").value = ""; sel.value = "1"; $("gPessoa").value = "";
+    $("gOutro").checked = false; $("gPessoaWrap").hidden = true; $("gPessoa").required = false;
+    [...$("gFatura").options].forEach((o) => { if (o.value !== "0" && o.value !== "1") o.remove(); });
+    [...sel.options].forEach((o) => { if (+o.value > 24) o.remove(); });
+    $("gFatura").value = "0"; $("gData").value = todayISO(); updFatura();
+  }
+  const LIMPAR = {
+    gastos: limparGasto,
+    proventos: () => { $("pDesc").value = ""; $("pValor").value = ""; $("pData").value = todayISO(); },
+    pagamentos: () => { $("qPessoa").value = ""; $("qValor").value = ""; $("qObs").value = ""; $("qData").value = todayISO(); },
+    cartoes: () => { $("cNome").value = ""; $("cVenc").value = ""; },
+  };
+  function cancelarEdicao(col) { setEdit(col, null); LIMPAR[col](); }
+  Object.keys(EDIT).forEach((col) => ($(EDIT[col].cancel).onclick = () => cancelarEdicao(col)));
+
+  function editar(col, id) {
+    const doc = state[col].find((d) => d.id === id);
+    if (!doc) return;
+    showTab(EDIT[col].tab);
+    if (col === "gastos") {
+      limparGasto();
+      $("gMarca").value = doc.marca || ""; $("gData").value = doc.data; $("gValor").value = (+doc.valor).toFixed(2);
+      document.querySelectorAll('input[name="cat"]').forEach((r) => (r.checked = r.value === (doc.categoria || "Outros")));
+      $("gCartao").value = cardById(doc.cartao) ? doc.cartao : ""; $("gCartao").dataset.touched = "1";
+      const n = Math.max(1, doc.parcelas | 0);
+      if (n > 24) sel.insertAdjacentHTML("beforeend", `<option value="${n}">${n}x</option>`);
+      sel.value = String(n);
+      const off = startMonth(doc) - monthIndex(doc.data);
+      if (off !== 0 && off !== 1) $("gFatura").insertAdjacentHTML("beforeend", `<option value="${off}"></option>`);
+      $("gFatura").value = String(off);
+      $("gOutro").checked = !!doc.pessoa; $("gPessoaWrap").hidden = !doc.pessoa; $("gPessoa").required = !!doc.pessoa; $("gPessoa").value = doc.pessoa || "";
+      updFatura();
+    } else if (col === "proventos") {
+      $("pDesc").value = doc.descricao || ""; $("pTipo").value = doc.tipo || "Outros"; $("pData").value = doc.data; $("pValor").value = (+doc.valor).toFixed(2);
+    } else if (col === "pagamentos") {
+      $("qPessoa").value = doc.pessoa || ""; $("qData").value = doc.data; $("qValor").value = (+doc.valor).toFixed(2); $("qObs").value = doc.obs || "";
+    } else if (col === "cartoes") {
+      $("cNome").value = doc.nome || ""; $("cBandeira").value = doc.bandeira || "Outra"; $("cVenc").value = doc.venc || "";
+      document.querySelectorAll('input[name="cor"]').forEach((r) => (r.checked = r.value === doc.cor));
+    }
+    setEdit(col, id);
+    $(EDIT[col].form).scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   async function save(col, doc, toastId, okMsg, after) {
     if (!store) { toast(toastId, "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
-    try { await store.add(col, doc); toast(toastId, okMsg); after && after(); }
+    const id = editando[col];
+    try {
+      if (id) {
+        const orig = state[col].find((d) => d.id === id);
+        if (orig && orig.criado) doc.criado = orig.criado;
+        await store.update(col, id, doc);
+        setEdit(col, null);
+        toast(toastId, "Alterações salvas.");
+      } else {
+        await store.add(col, doc);
+        toast(toastId, okMsg);
+      }
+      after && after();
+    }
     catch (e) { toast(toastId, e && e.code === "quota_exceeded" ? "Limite de registros atingido. Apague lançamentos antigos para continuar." : "Não foi possível salvar. Verifique a conexão e tente de novo.", true); }
   }
 
@@ -772,8 +863,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     doc.mes = ymOf(monthIndex(doc.data) + +$("gFatura").value);
     if (outro && !doc.pessoa) { toast("gToast", "Informe o nome de quem usou o cartão.", true); return; }
     save("gastos", doc, "gToast", `Gasto adicionado${doc.pessoa ? ` e lançado para ${doc.pessoa}` : ""}.`, () => {
-      $("gMarca").value = ""; $("gValor").value = ""; sel.value = "1"; $("gPessoa").value = "";
-      $("gOutro").checked = false; $("gPessoaWrap").hidden = true; $("gPessoa").required = false; updHint();
+      limparGasto();
       cur = startMonth(doc); render();
     });
   };
@@ -781,13 +871,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     e.preventDefault();
     const doc = { descricao: $("pDesc").value.trim(), tipo: $("pTipo").value, data: $("pData").value, valor: Math.round(parseFloat($("pValor").value) * 100) / 100, criado: Date.now() };
     if (!doc.descricao || !(doc.valor > 0)) return;
-    save("proventos", doc, "pToast", "Provento adicionado.", () => { $("pDesc").value = ""; $("pValor").value = ""; cur = monthIndex(doc.data); render(); });
+    save("proventos", doc, "pToast", "Provento adicionado.", () => { LIMPAR.proventos(); cur = monthIndex(doc.data); render(); });
   };
   $("fPag").onsubmit = (e) => {
     e.preventDefault();
     const doc = { pessoa: $("qPessoa").value.trim(), data: $("qData").value, valor: Math.round(parseFloat($("qValor").value) * 100) / 100, obs: $("qObs").value.trim(), criado: Date.now() };
     if (!doc.pessoa || !(doc.valor > 0)) return;
-    save("pagamentos", doc, "qToast", `Pagamento de ${doc.pessoa} registrado.`, () => { $("qPessoa").value = ""; $("qValor").value = ""; $("qObs").value = ""; });
+    save("pagamentos", doc, "qToast", `Pagamento de ${doc.pessoa} registrado.`, () => { LIMPAR.pagamentos(); });
   };
   $("gCartao").onchange = () => { $("gCartao").dataset.touched = "1"; };
   $("cCores").innerHTML = CARD_COLORS.map((c, i) => `<label><input type="radio" name="cor" id="cor-${i}" value="${c}"${i === 0 ? " checked" : ""} aria-label="Cor ${i + 1}"><span style="background:${c}"></span></label>`).join("");
@@ -797,29 +887,55 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
     const doc = { nome: $("cNome").value.trim(), bandeira: $("cBandeira").value, venc: venc >= 1 && venc <= 31 ? venc : null,
       cor: document.querySelector('input[name="cor"]:checked').value, criado: Date.now() };
     if (!doc.nome) return;
-    if (state.cartoes.some((c) => keyName(c.nome) === keyName(doc.nome))) { toast("cToast", "Já existe um cartão com esse nome.", true); return; }
-    save("cartoes", doc, "cToast", `Cartão ${doc.nome} cadastrado.`, () => { $("cNome").value = ""; $("cVenc").value = ""; });
+    if (state.cartoes.some((c) => c.id !== editando.cartoes && keyName(c.nome) === keyName(doc.nome))) { toast("cToast", "Já existe um cartão com esse nome.", true); return; }
+    save("cartoes", doc, "cToast", `Cartão ${doc.nome} cadastrado.`, () => { LIMPAR.cartoes(); });
   };
 
   document.addEventListener("click", async (e) => {
     const pay = e.target.closest("[data-pay]");
     if (pay) {
+      if (editando.pagamentos) cancelarEdicao("pagamentos");
       showTab("pagamento");
       $("qPessoa").value = pay.dataset.pay; $("qValor").value = (+pay.dataset.val).toFixed(2);
+      // O pagamento precisa cair no mês que está na tela para abater a parcela dele.
+      const hoje = todayISO(), mHoje = monthIndex(hoje);
+      if (cur !== mHoje) {
+        const y = Math.floor(cur / 12), mo = cur % 12, ultimo = new Date(y, mo + 1, 0).getDate();
+        $("qData").value = `${y}-${String(mo + 1).padStart(2, "0")}-${String(Math.min(+hoje.slice(8), ultimo)).padStart(2, "0")}`;
+      } else $("qData").value = hoje;
       $("qValor").focus(); $("fPag").scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
+    const ed = e.target.closest("[data-edit]");
+    if (ed) { editar(ed.dataset.edit, ed.dataset.id); return; }
     const del = e.target.closest("[data-del]");
     if (del && store) {
-      if (!del.classList.contains("arm")) {
-        document.querySelectorAll(".del.arm").forEach((b) => { b.classList.remove("arm"); b.textContent = "excluir"; });
-        del.classList.add("arm"); del.textContent = "confirmar exclusão";
-        setTimeout(() => { if (del.isConnected) { del.classList.remove("arm"); del.textContent = "excluir"; } }, 4000);
-        return;
-      }
-      try { await store.del(del.dataset.del, del.dataset.id); } catch (err) { $("foot").textContent = "Não foi possível excluir. Tente de novo."; }
+      const col = del.dataset.del, id = del.dataset.id;
+      const doc = state[col].find((d) => d.id === id);
+      try {
+        await store.del(col, id);
+        if (editando[col] === id) cancelarEdicao(col);
+        if (doc) mostrarDesfazer(col, doc);
+      } catch (err) { $("foot").textContent = "Não foi possível excluir. Tente de novo."; }
     }
   });
+
+  // Excluir não pede confirmação; o "Desfazer" fica alguns segundos na tela.
+  let ultimoExcluido = null, undoTimer = null;
+  function mostrarDesfazer(col, doc) {
+    ultimoExcluido = { col, doc: JSON.parse(JSON.stringify(doc)) };
+    const nome = doc.marca || doc.descricao || doc.nome || doc.pessoa || "Lançamento";
+    $("undoMsg").textContent = `${nome} excluído.`;
+    $("undo").hidden = false;
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { $("undo").hidden = true; ultimoExcluido = null; }, 7000);
+  }
+  $("undoBtn").onclick = async () => {
+    if (!ultimoExcluido || !store) return;
+    const { col, doc } = ultimoExcluido;
+    ultimoExcluido = null; $("undo").hidden = true; clearTimeout(undoTimer);
+    try { await store.add(col, doc); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Lance de novo."; }
+  };
 
   // ---------- backup (só quando os dados ficam no aparelho) ----------
   $("expBtn").onclick = () => {
