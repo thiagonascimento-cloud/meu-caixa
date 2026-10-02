@@ -165,6 +165,20 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.fat { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.fat:first-child { border-top: 0; padding-top: 0; }
+.fat-n { display: grid; gap: 4px; min-width: 0; font-size: 0.9rem; }
+.fat-n > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fat small, .fat-v small { color: var(--muted); font-size: 0.75rem; }
+.fat .track { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.fat .fill { height: 100%; border-radius: 4px; }
+.fat-v { display: grid; justify-items: end; text-align: right; }
+.fat-v .num { font-size: 0.95rem; }
+.fat.paga .fat-v small { color: var(--in); font-weight: 600; }
+.fat.paga .fill { opacity: 0.45; }
+.flag { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.flag input { width: 18px; height: 18px; accent-color: var(--in); margin: 0; padding: 0; flex: none; }
+.cardrow .flag { margin-top: 6px; }
 .chips button { border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 11px; border-radius: 999px; font-size: 0.84rem; font-weight: 500; }
 .chips button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 .chips:empty { display: none; }
@@ -516,7 +530,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   // Sincronização com a Planilha Google (Apps Script). O aparelho continua sendo o cache:
   // cada alteração entra numa fila salva no aparelho e é enviada quando há internet.
   const SYNC_KEY = "meu-caixa-sync", FILA_KEY = "meu-caixa-fila";
-  let syncEstado = null, syncHora = null;
+  let syncEstado = null, syncHora = null, servidorVersao = 2;
   const URL_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
   // Código de conexão: "mc1." + endereço e chave em base64, para levar a outro aparelho numa vez só.
   function gerarCodigo(cfg) { return "mc1." + btoa(JSON.stringify({ u: cfg.url, k: cfg.chave })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
@@ -568,6 +582,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
         const j = await r.json();
         if (!j.ok) throw Object.assign(new Error(j.erro || "falha"), { code: j.erro });
         fila.splice(0, envio.length); salvaFila();
+        servidorVersao = j.versao || 1;
+        if (servidorVersao < 2) {
+          // Código antigo na planilha não guarda campos novos: mantém as faturas pagas deste aparelho.
+          const pagosLocais = new Map(local.dump().cartoes.filter((c) => Array.isArray(c.pagos)).map((c) => [c.id, c.pagos]));
+          (j.dados.cartoes || []).forEach((c) => { if (pagosLocais.has(c.id)) c.pagos = pagosLocais.get(c.id); });
+        }
         local.replaceAll(j.dados);
         if (fila.length) local.applyOps(fila);
         syncEstado = "ok"; syncHora = new Date();
@@ -639,6 +659,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   function delBtn(col, id) {
     return `<span class="acts"><button type="button" class="del" data-edit="${col}" data-id="${esc(id)}">editar</button><button type="button" class="del" data-del="${col}" data-id="${esc(id)}">excluir</button></span>`;
   }
+  const faturaPaga = (c, ym) => !!(c && Array.isArray(c.pagos) && c.pagos.includes(ym));
   function cardPill(g) {
     if (!g.cartao) return "";
     const c = cardById(g.cartao);
@@ -666,7 +687,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("sumIn").textContent = money(totIn);
     $("sumInS").textContent = provMes.length ? `${provMes.length} ${provMes.length === 1 ? "entrada" : "entradas"}` : "nenhuma entrada";
     $("sumCard").textContent = money(totCard);
-    $("sumCardS").textContent = totDeles > 0 ? `${money(totDeles)} é de outras pessoas` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`;
+    const aPagar = parc.filter((it) => !(cardById(it.g.cartao) && faturaPaga(cardById(it.g.cartao), ymOf(cur)))).reduce((s, it) => s + it.v, 0);
+    $("sumCardS").textContent = (aPagar < totCard - 0.004 ? `falta pagar ${money(aPagar)}` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`) + (totDeles > 0 ? ` · ${money(totDeles)} de outras pessoas` : "");
     const net = totIn - meu;
     $("sumNet").textContent = money(net);
     $("sumNet").className = "v num " + (net < 0 ? "out" : "in");
@@ -686,16 +708,20 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <span class="num">${money(c.v)}</span></div>`).join("");
 
     // fatura por cartão
+    const ymCur = ymOf(cur);
     const byCard = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome))
-      .map((c) => ({ nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
+      .map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", pago: faturaPaga(c, ymCur), v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
     const semCartao = parc.filter((it) => !cardById(it.g.cartao)).reduce((s, it) => s + it.v, 0);
-    if (semCartao > 0) byCard.push({ nome: "Sem cartão", cor: "var(--cat-outros)", sub: "", v: semCartao });
+    if (semCartao > 0) byCard.push({ id: "", nome: "Sem cartão", cor: "var(--cat-outros)", sub: "Pix, dinheiro ou outro", pago: false, v: semCartao });
     const maxCard = Math.max(...byCard.map((c) => c.v), 0);
     $("cardBars").innerHTML = state.cartoes.length === 0
       ? `<div class="empty">Cadastre seus cartões na aba "Cartões" para ver a fatura de cada um.</div>`
-      : byCard.map((c) => `<div class="bar"><span title="${esc(c.sub)}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>
-          <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div>
-          <span class="num">${money(c.v)}</span></div>`).join("");
+      : byCard.map((c) => `<div class="fat${c.pago ? " paga" : ""}">
+          <div class="fat-n"><span><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}
+            <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div></div>
+          <div class="fat-v"><span class="num">${money(c.v)}</span><small>${c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? `a pagar ${money(c.v)}` : "sem fatura"}</small></div>
+          ${c.id ? `<label class="flag" title="Marcar a fatura de ${MONTHS[mo]} como paga"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
+        </div>`).join("");
 
     // devedores
     $("debtors").innerHTML = devs.length === 0
@@ -795,7 +821,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       ? `<div class="empty">Nenhum cartão cadastrado ainda.</div>`
       : `<span class="label">Seus cartões</span>` + cards.map((c) => `<div class="cardrow">
           <div><div class="t"><i class="card-swatch" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</div>
-            <div class="meta"><span>${esc(c.bandeira || "")}</span>${c.venc ? `<span>vence dia ${c.venc}</span>` : ""}<span>${uso(c.id)} ${uso(c.id) === 1 ? "gasto" : "gastos"}</span></div></div>
+            <div class="meta"><span>${esc(c.bandeira || "")}</span>${c.venc ? `<span>vence dia ${c.venc}</span>` : ""}<span>${uso(c.id)} ${uso(c.id) === 1 ? "gasto" : "gastos"}</span></div>
+            <label class="flag"><input type="checkbox" data-pagar="${esc(c.id)}"${faturaPaga(c, ymOf(cur)) ? " checked" : ""}> Fatura de ${MONTHS[cur % 12]} paga</label></div>
           ${delBtn("cartoes", c.id)}</div>`).join("");
   }
 
@@ -1008,6 +1035,19 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     try { await store.add(col, doc); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Lance de novo."; }
   };
 
+  // Flag de fatura paga: guarda o mês no cartão; os gastos continuam contando normalmente.
+  document.addEventListener("change", async (e) => {
+    const f = e.target.closest("[data-pagar]");
+    if (!f || !store) return;
+    const c = cardById(f.dataset.pagar); if (!c) return;
+    const ym = ymOf(cur);
+    const pagos = (Array.isArray(c.pagos) ? c.pagos : []).filter((x) => x !== ym);
+    if (f.checked) pagos.push(ym);
+    const { id, ...resto } = c;
+    try { await store.update("cartoes", id, { ...resto, pagos: pagos.sort() }); }
+    catch (err) { f.checked = !f.checked; $("foot").textContent = "Não foi possível marcar a fatura. Tente de novo."; }
+  });
+
   // ---------- backup (só quando os dados ficam no aparelho) ----------
   $("expBtn").onclick = () => {
     if (!store || !store.dump) return;
@@ -1030,7 +1070,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       const n = store.pendentes();
       const hora = syncHora ? syncHora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
       const msg = {
-        ok: `Sincronizado com sua Planilha Google às ${hora}.`,
+        ok: servidorVersao < 2 ? `Sincronizado às ${hora}. Atualize o código da sua Planilha Google para guardar as faturas pagas nela.` : `Sincronizado com sua Planilha Google às ${hora}.`,
         sincronizando: "Sincronizando com sua Planilha Google…",
         chave: "A planilha recusou a chave. Toque em Planilha Google e confira a chave.",
         offline: `Sem conexão com a planilha.${n ? ` ${n} ${n === 1 ? "alteração aguardando" : "alterações aguardando"}; envio quando a internet voltar.` : ""}`,
