@@ -165,6 +165,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.quick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+.quick input { font-size: 1rem; }
+.quick .primary { padding: 9px 18px; }
+.quick .hint { grid-column: 1 / -1; }
+.quick .hint.ok { color: var(--fg); }
+.quick .hint.ok b { color: var(--accent); font-family: var(--font-body); }
+.quick .hint.err { color: var(--out); }
 .fat { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
 .fat:first-child { border-top: 0; padding-top: 0; }
 .fat-n { display: grid; gap: 4px; min-width: 0; font-size: 0.9rem; }
@@ -238,6 +245,13 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       <button id="nextMonth" aria-label="Próximo mês">›</button>
     </div>
   </header>
+
+  <form class="quick" id="fRapido" autocomplete="off">
+    <label class="field"><span>Lançamento rápido</span>
+      <input id="rText" enterkeyhint="send" autocapitalize="sentences" placeholder="uber 25,90 nubank  ·  renner 300 3x inter p/ ana  ·  recebi 500 freela"></label>
+    <button class="primary" type="submit">Lançar</button>
+    <p class="hint" id="rPrev">Escreva o que gastou, o valor e o cartão, do jeito que mandaria numa mensagem. Também vale "recebi 2918,23 salário" ou "ana pagou 50".</p>
+  </form>
 
   <div class="notice" id="localNotice" hidden>
     <span id="localMsg">Seus dados ficam salvos só neste aparelho. Faça um backup de vez em quando.</span>
@@ -851,6 +865,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
         </div>`).join("");
 
     renderBusca();
+    if ($("rText").value.trim()) prevRapido();
 
     // proventos
     $("provList").innerHTML = provMes.length === 0
@@ -870,6 +885,145 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     // nomes para autocompletar
     const nomes = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
     $("pessoasList").innerHTML = nomes.map((n) => `<option value="${esc(n)}"></option>`).join("");
+  }
+
+  // Interpreta uma frase curta ("uber 25,90 nubank", "renner 300 3x inter p/ ana",
+  // "recebi 2918,23 salario", "ana pagou 50") e devolve o lançamento pronto.
+  // ctx: { cartoes: [{id, nome}], pessoas: [nomes], hoje: "AAAA-MM-DD" }
+  function interpretarLancamento(texto, ctx) {
+    var sem = function (s) { return String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(); };
+    var orig = String(texto || "").replace(/\s+/g, " ").trim();
+    if (!orig) return null;
+    var W = orig.split(" ");
+    var P = W.map(function (w) { return sem(w).replace(/[.,;:!?]+$/, function (m) { return /\d$/.test(w.slice(0, -m.length)) ? m : ""; }); });
+    var usado = W.map(function () { return false; });
+    var hoje = ctx.hoje;
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+    var dHoje = new Date(+hoje.slice(0, 4), +hoje.slice(5, 7) - 1, +hoje.slice(8, 10));
+
+    // data
+    var data = hoje;
+    P.forEach(function (w, i) {
+      if (usado[i]) return;
+      if (w === "hoje") { usado[i] = true; }
+      else if (w === "ontem" || w === "anteontem") { var d = new Date(dHoje); d.setDate(d.getDate() - (w === "ontem" ? 1 : 2)); data = ymd(d); usado[i] = true; }
+      else {
+        var m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(w);
+        if (m && +m[1] >= 1 && +m[1] <= 31 && +m[2] >= 1 && +m[2] <= 12) {
+          var y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : dHoje.getFullYear();
+          data = y + "-" + pad(m[2]) + "-" + pad(m[1]); usado[i] = true;
+        }
+      }
+    });
+
+    // parcelas: "3x", "x3", "3 vezes"
+    var parcelas = 1;
+    P.forEach(function (w, i) {
+      if (usado[i]) return;
+      var m = /^(\d{1,2})x$/.exec(w) || /^x(\d{1,2})$/.exec(w);
+      if (m && +m[1] >= 1) { parcelas = +m[1]; usado[i] = true; }
+      else if (/^\d{1,2}$/.test(w) && (P[i + 1] === "vezes" || P[i + 1] === "parcelas") && !usado[i + 1]) { parcelas = +w; usado[i] = usado[i + 1] = true; }
+    });
+
+    // valor: primeiro número (aceita 25,90 · 25.90 · 1.500,00 · R$ 25,90)
+    var valor = null;
+    P.forEach(function (w, i) {
+      if (usado[i] || valor !== null) return;
+      if (w === "r$") { usado[i] = true; return; }
+      var v = w.replace(/^r\$/, "");
+      if (!/^(\d{1,3}(\.\d{3})+|\d+)([.,]\d{1,2})?$/.test(v)) return;
+      var n = v.indexOf(",") >= 0 ? parseFloat(v.replace(/\./g, "").replace(",", "."))
+        : /\.\d{3}$/.test(v) ? parseFloat(v.replace(/\./g, "")) : parseFloat(v);
+      if (n > 0) { valor = Math.round(n * 100) / 100; usado[i] = true; if (P[i - 1] === "r$") usado[i - 1] = true; }
+    });
+    P.forEach(function (w, i) { if (w === "reais" || w === "real") usado[i] = true; });
+
+    // sequência de palavras (ignorando as já usadas) que bate com um nome
+    var acharSeq = function (nome) {
+      var alvo = sem(nome).split(/\s+/).filter(Boolean);
+      if (!alvo.length) return -1;
+      for (var i = 0; i + alvo.length <= P.length; i++) {
+        var ok = true;
+        for (var j = 0; j < alvo.length; j++) if (usado[i + j] || P[i + j] !== alvo[j]) { ok = false; break; }
+        if (ok) return i;
+      }
+      return -1;
+    };
+    var marcar = function (i, n) { for (var j = 0; j < n; j++) usado[i + j] = true; };
+
+    // cartão (o nome mais longo primeiro)
+    var cartao = "", cartaoNome = "";
+    (ctx.cartoes || []).slice().sort(function (a, b) { return b.nome.length - a.nome.length; }).some(function (c) {
+      var i = acharSeq(c.nome);
+      if (i < 0) return false;
+      marcar(i, sem(c.nome).split(/\s+/).filter(Boolean).length);
+      cartao = c.id; cartaoNome = c.nome; return true;
+    });
+
+    // tipo
+    var tipo = "gasto";
+    var iPagou = P.findIndex(function (w, i) { return !usado[i] && (w === "pagou" || w === "devolveu" || w === "pagamento" || w === "acertou"); });
+    if (["recebi", "salario", "provento", "entrou", "recebimento"].indexOf(P[0]) >= 0) tipo = "provento";
+    else if (iPagou >= 0) tipo = "pagamento";
+
+    // pessoa: nomes já usados no app, ou "p/ Ana", "pra Ana", "para Ana"
+    var pessoa = "";
+    (ctx.pessoas || []).slice().sort(function (a, b) { return b.length - a.length; }).some(function (n) {
+      var i = acharSeq(n);
+      if (i < 0) return false;
+      marcar(i, sem(n).split(/\s+/).filter(Boolean).length);
+      if (i > 0 && ["p/", "pra", "para", "pro", "da", "do"].indexOf(P[i - 1]) >= 0) usado[i - 1] = true;
+      pessoa = n; return true;
+    });
+    if (!pessoa) P.forEach(function (w, i) {
+      if (pessoa || usado[i] || ["p/", "pra", "para", "pro"].indexOf(w) < 0 || i + 1 >= P.length || usado[i + 1]) return;
+      if (tipo === "gasto" && !/^[A-ZÀ-Ý]/.test(W[i + 1]) && w !== "p/") return;
+      pessoa = W[i + 1].charAt(0).toUpperCase() + W[i + 1].slice(1).toLowerCase(); usado[i] = usado[i + 1] = true;
+    });
+    if (tipo === "pagamento") {
+      usado[iPagou] = true;
+      if (!pessoa && iPagou > 0 && !usado[iPagou - 1]) { pessoa = W[iPagou - 1].charAt(0).toUpperCase() + W[iPagou - 1].slice(1).toLowerCase(); usado[iPagou - 1] = true; }
+      P.forEach(function (w, i) { if (w === "me") usado[i] = true; });
+    }
+
+    // categoria
+    var CAT = {
+      "Despesa fixa": ["aluguel", "condominio", "luz", "energia", "agua", "internet", "claro", "vivo", "tim", "oi", "netflix", "youtube", "spotify", "academia", "crossfit", "plano", "faculdade", "escola", "emprestimo", "seguro", "iptu", "ipva", "financiamento", "fixa", "fixo", "assinatura", "icloud", "apple", "multa"],
+      "Lazer": ["lazer", "sauna", "spa", "bar", "cinema", "show", "viagem", "passeio", "festa", "balada", "hotel", "praia", "jogo", "shopping", "ingresso"],
+      "Alimentação": ["alimentacao", "comida", "mercado", "supermercado", "ifood", "padaria", "restaurante", "lanche", "pizza", "hamburguer", "feira", "hortifrut", "acougue", "almoco", "jantar", "cafe", "mercadinho", "panificadora", "frutas", "sorvete", "suplemento"],
+    };
+    var categoria = "Outros";
+    var explicito = { fixa: "Despesa fixa", fixo: "Despesa fixa", lazer: "Lazer", alimentacao: "Alimentação", comida: "Alimentação", outros: "Outros" };
+    P.forEach(function (w, i) { if (!usado[i] && explicito[w]) { categoria = explicito[w]; usado[i] = true; } });
+    if (categoria === "Outros") Object.keys(CAT).some(function (k) {
+      return P.some(function (w, i) { return !usado[i] && CAT[k].some(function (c) { return w === c || (c.length > 4 && w.indexOf(c) === 0); }); }) && (categoria = k);
+    });
+
+    // o que sobrou vira a loja / descrição
+    var FILLER = ["no", "na", "do", "da", "de", "com", "cartao", "em", "pelo", "pela", "a", "o", "vista", "avista", "credito", "debito", "via", "e", "gastei", "comprei", "paguei"];
+    var resto = W.filter(function (w, i) { return !usado[i] && FILLER.indexOf(P[i]) < 0; }).join(" ").trim();
+    var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
+
+    if (valor === null) return { erro: "Não achei o valor. Escreva, por exemplo: uber 25,90 nubank" };
+    var mes = data.slice(0, 7);
+    var fmt = function (v) { return "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
+    var dataBR = data.slice(8, 10) + "/" + data.slice(5, 7);
+    if (tipo === "provento") {
+      var ehSal = P.indexOf("salario") >= 0;
+      var desc = cap(resto.replace(/^(recebi|provento|entrou|recebimento)\s*/i, "")) || (ehSal ? "Salário" : "Provento");
+      var tipoP = ehSal ? "Salário" : /freela|extra|bico/.test(sem(resto)) ? "Extra / freela" : "Outros";
+      return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, valor: valor },
+        resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR };
+    }
+    if (tipo === "pagamento") {
+      if (!pessoa) return { erro: "Diga quem pagou. Exemplo: ana pagou 50" };
+      return { col: "pagamentos", doc: { pessoa: pessoa, data: data, valor: valor, obs: cap(resto) },
+        resumo: "Pagamento de " + pessoa + " · " + fmt(valor) + " · " + dataBR };
+    }
+    var marca = cap(resto) || "Gasto";
+    return { col: "gastos", doc: { marca: marca, data: data, mes: mes, categoria: categoria, valor: valor, parcelas: parcelas, cartao: cartao, pessoa: pessoa },
+      resumo: "Gasto: " + marca + " · " + fmt(valor) + (parcelas > 1 ? " em " + parcelas + "x" : "") + " · " + (cartaoNome || "sem cartão") + " · " + categoria + (pessoa ? " · de " + pessoa : "") + " · " + dataBR };
   }
 
   // ---------- procurar ----------
@@ -1142,21 +1296,62 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   });
 
   // Excluir não pede confirmação; o "Desfazer" fica alguns segundos na tela.
-  let ultimoExcluido = null, undoTimer = null;
-  function mostrarDesfazer(col, doc) {
-    ultimoExcluido = { col, doc: JSON.parse(JSON.stringify(doc)) };
-    const nome = doc.marca || doc.descricao || doc.nome || doc.pessoa || "Lançamento";
-    $("undoMsg").textContent = `${nome} excluído.`;
+  let acaoDesfazer = null, undoTimer = null;
+  function avisar(msg, desfazer) {
+    acaoDesfazer = desfazer;
+    $("undoMsg").textContent = msg;
     $("undo").hidden = false;
     clearTimeout(undoTimer);
-    undoTimer = setTimeout(() => { $("undo").hidden = true; ultimoExcluido = null; }, 7000);
+    undoTimer = setTimeout(() => { $("undo").hidden = true; acaoDesfazer = null; }, 8000);
+  }
+  function mostrarDesfazer(col, doc) {
+    const copia = JSON.parse(JSON.stringify(doc));
+    const nome = doc.marca || doc.descricao || doc.nome || doc.pessoa || "Lançamento";
+    avisar(`${nome} excluído.`, () => store.add(col, copia));
   }
   $("undoBtn").onclick = async () => {
-    if (!ultimoExcluido || !store) return;
-    const { col, doc } = ultimoExcluido;
-    ultimoExcluido = null; $("undo").hidden = true; clearTimeout(undoTimer);
-    try { await store.add(col, doc); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Lance de novo."; }
+    const fn = acaoDesfazer;
+    acaoDesfazer = null; $("undo").hidden = true; clearTimeout(undoTimer);
+    if (!fn || !store) return;
+    try { await fn(); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Tente de novo."; }
   };
+
+  // ---------- lançamento rápido ----------
+  function ctxRapido() {
+    const pessoas = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa && x.pessoa.trim()).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
+    return { cartoes: state.cartoes.map((c) => ({ id: c.id, nome: c.nome })), pessoas, hoje: todayISO() };
+  }
+  function prevRapido() {
+    const t = $("rText").value.trim(), el = $("rPrev");
+    if (!t) { el.className = "hint"; el.textContent = "Escreva o que gastou, o valor e o cartão, do jeito que mandaria numa mensagem. Também vale \"recebi 2918,23 salário\" ou \"ana pagou 50\"."; return; }
+    const r = interpretarLancamento(t, ctxRapido());
+    if (r.erro) { el.className = "hint err"; el.textContent = r.erro; return; }
+    el.className = "hint ok"; el.innerHTML = `<b>Vai lançar:</b> ${esc(r.resumo)}. Toque em Lançar ou aperte Enter.`;
+  }
+  $("rText").addEventListener("input", prevRapido);
+  $("fRapido").onsubmit = async (e) => {
+    e.preventDefault();
+    const t = $("rText").value.trim(); if (!t) return;
+    const r = interpretarLancamento(t, ctxRapido());
+    if (r.erro) { prevRapido(); return; }
+    if (!store) { $("rPrev").className = "hint err"; $("rPrev").textContent = "Ainda carregando seus dados. Tente de novo em instantes."; return; }
+    const doc = { ...r.doc, criado: Date.now() };
+    try {
+      const id = await store.add(r.col, doc);
+      $("rText").value = ""; prevRapido();
+      cur = r.col === "gastos" ? startMonth(doc) : monthIndex(doc.data); render();
+      avisar(`Lançado. ${r.resumo}`, () => store.del(r.col, id));
+    } catch (err) { $("rPrev").className = "hint err"; $("rPrev").textContent = "Não foi possível salvar. Verifique a conexão e tente de novo."; }
+  };
+  // Texto compartilhado de outro app (WhatsApp, banco): chega como ?titulo=…&texto=… e vai para o lançamento rápido.
+  (function receberCompartilhado() {
+    let u; try { u = new URL(location.href); } catch (e) { return; }
+    const t = ["titulo", "texto", "link"].map((k) => u.searchParams.get(k)).filter(Boolean).join(" ").trim();
+    if (!t) return;
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    $("rText").value = t.replace(/\s+/g, " ").slice(0, 300);
+    setTimeout(() => { prevRapido(); $("rText").focus(); }, 0);
+  })();
 
   // Flag de fatura paga: guarda o mês no cartão; os gastos continuam contando normalmente.
   document.addEventListener("change", async (e) => {
