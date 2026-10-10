@@ -189,6 +189,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .ohead .r b { color: var(--owe); font-weight: 600; }
 .ohead .r b.ok { color: var(--in); }
 .chips button .dot { margin-right: 5px; }
+#busca { font-size: 1rem; }
 .formbtns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .formbtns .primary:only-child, .formbtns .primary:has(+ [hidden]) { grid-column: 1 / -1; }
 form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8px; margin: -8px; }
@@ -381,6 +382,18 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     </div>
 
     <div class="col">
+      <section class="panel" aria-label="Procurar">
+        <div class="panel-head"><h2>Procurar</h2><span class="label" id="busCount"></span></div>
+        <input id="busca" type="search" autocomplete="off" placeholder="Loja, pessoa, cartão, data ou valor (ex.: 45,90)" aria-label="Procurar lançamentos">
+        <div class="chips" id="busTipos" role="group" aria-label="Tipo">
+          <button type="button" data-btipo="" aria-pressed="true">Tudo</button>
+          <button type="button" data-btipo="gastos" aria-pressed="false">Gastos</button>
+          <button type="button" data-btipo="proventos" aria-pressed="false">Proventos</button>
+          <button type="button" data-btipo="pagamentos" aria-pressed="false">Pagamentos</button>
+        </div>
+        <div class="list" id="busRes"></div>
+      </section>
+
       <section class="panel" aria-label="Quem me deve">
         <div class="panel-head"><h2>Quem me deve</h2><span class="label" id="oweMonth"></span></div>
         <div class="debtors" id="debtors"></div>
@@ -463,7 +476,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   let cur = now.getFullYear() * 12 + now.getMonth();
   let view = "mes";
   let oView = "mes", oPessoa = "";
-  let kView = "mes", kCartao = null;
+  let kView = "mes", kCartao = "";
+  let bTipo = "";
 
   // ---------- armazenamento ----------
   let store = null;
@@ -836,6 +850,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             </div>`).join("")}</div>
         </div>`).join("");
 
+    renderBusca();
+
     // proventos
     $("provList").innerHTML = provMes.length === 0
       ? `<div class="empty">Nenhum provento lançado neste mês. Use a aba "Provento" para registrar salário ou outras entradas.</div>`
@@ -854,6 +870,50 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     // nomes para autocompletar
     const nomes = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
     $("pessoasList").innerHTML = nomes.map((n) => `<option value="${esc(n)}"></option>`).join("");
+  }
+
+  // ---------- procurar ----------
+  const semAcento = (s) => String(s ?? "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const fmtData = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+  const mesTxt = (i) => `${MON3[i % 12]}/${String(Math.floor(i / 12)).slice(2)}`;
+  function renderBusca() {
+    const q = $("busca").value.trim();
+    if (!q) { $("busRes").innerHTML = `<div class="empty">Digite uma loja, pessoa, cartão, categoria, data (ex.: 05/10) ou valor (ex.: 45,90). A busca olha todos os meses.</div>`; $("busCount").textContent = ""; return; }
+    const termos = semAcento(q).split(/\s+/).filter(Boolean);
+    const numero = (t) => (/^\d+([.,]\d{1,2})?$/.test(t) ? parseFloat(t.replace(",", ".")) : null);
+    const casa = (texto, valores) => termos.every((t) => {
+      const n = numero(t);
+      if (n !== null && valores.some((v) => Math.abs(v - n) < 0.005)) return true;
+      return texto.includes(t);
+    });
+    const res = [];
+    if (!bTipo || bTipo === "gastos") for (const g of state.gastos) {
+      const c = cardById(g.cartao), n = Math.max(1, g.parcelas | 0), s0 = startMonth(g);
+      const vals = [g.valor, parcelaValor(g, 0), parcelaValor(g, 1)];
+      const texto = semAcento([g.marca, g.categoria, g.pessoa, c ? c.nome : "sem cartão", fmtData(g.data), MONTHS[monthIndex(g.data) % 12], MONTHS[s0 % 12], vals.map(money).join(" "), "gasto"].join(" "));
+      if (casa(texto, vals)) res.push({ col: "gastos", d: g, data: g.data, ir: s0, t: g.marca, v: -g.valor,
+        meta: `<span class="pill">Gasto</span><span><i class="dot" style="background:${catColor(g.categoria)}"></i>${esc(g.categoria || "Outros")}</span><span>${n > 1 ? `${n}x de ${money(parcelaValor(g, 1))} · fatura ${mesTxt(s0)} a ${mesTxt(s0 + n - 1)}` : `à vista · fatura ${mesTxt(s0)}`}</span>${cardPill(g)}${g.pessoa ? `<span class="pill owe">${esc(g.pessoa)}</span>` : ""}` });
+    }
+    if (!bTipo || bTipo === "proventos") for (const p of state.proventos) {
+      const texto = semAcento([p.descricao, p.tipo, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "provento"].join(" "));
+      if (casa(texto, [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: monthIndex(p.data), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento</span><span>${esc(p.tipo || "")}</span>` });
+    }
+    if (!bTipo || bTipo === "pagamentos") for (const p of state.pagamentos) {
+      const texto = semAcento([p.pessoa, p.obs, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "pagamento recebido"].join(" "));
+      if (casa(texto, [p.valor])) res.push({ col: "pagamentos", d: p, data: p.data, ir: monthIndex(p.data), t: `${p.pessoa} te pagou`, v: p.valor, meta: `<span class="pill">Pagamento</span>${p.obs ? `<span>${esc(p.obs)}</span>` : ""}` });
+    }
+    res.sort((a, b) => b.data.localeCompare(a.data));
+    const LIM = 60, total = res.reduce((s, r) => s + r.v, 0);
+    $("busCount").textContent = res.length ? `${res.length} ${res.length === 1 ? "resultado" : "resultados"}` : "";
+    $("busRes").innerHTML = res.length === 0
+      ? `<div class="empty">Nada encontrado para "${esc(q)}".</div>`
+      : res.slice(0, LIM).map((r) => `<div class="item">${dateCell(r.data)}
+          <div class="who"><div class="t">${esc(r.t)}</div><div class="meta">${r.meta}</div></div>
+          <div class="amt"><span class="a ${r.v < 0 ? "out" : "in"}">${r.v < 0 ? "−" : "+"} ${money(Math.abs(r.v))}</span>
+            <span class="acts"><button type="button" class="del" data-irmes="${r.ir}">ver no mês</button></span>${delBtn(r.col, r.d.id)}</div>
+        </div>`).join("")
+        + (res.length > LIM ? `<p class="hint">Mostrando ${LIM} de ${res.length}. Digite mais detalhes para refinar.</p>` : "")
+        + (res.length > 1 ? `<p class="hint">Soma dos resultados: <b>${money(total)}</b></p>` : "");
   }
 
   function renderCartoes() {
@@ -879,6 +939,19 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   $("vMes").onclick = () => { view = "mes"; $("vMes").setAttribute("aria-pressed", "true"); $("vTodos").setAttribute("aria-pressed", "false"); render(); };
   $("oMes").onclick = () => { oView = "mes"; $("oMes").setAttribute("aria-pressed", "true"); $("oTodos").setAttribute("aria-pressed", "false"); render(); };
   $("oTodos").onclick = () => { oView = "todos"; $("oTodos").setAttribute("aria-pressed", "true"); $("oMes").setAttribute("aria-pressed", "false"); render(); };
+  let buscaT = null;
+  $("busca").addEventListener("input", () => { clearTimeout(buscaT); buscaT = setTimeout(renderBusca, 150); });
+  $("busTipos").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-btipo]"); if (!b) return;
+    bTipo = b.dataset.btipo;
+    $("busTipos").querySelectorAll("[data-btipo]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderBusca();
+  });
+  $("busRes").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-irmes]"); if (!b) return;
+    cur = +b.dataset.irmes; render();
+    $("monthLabel").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
   $("kMes").onclick = () => { kView = "mes"; $("kMes").setAttribute("aria-pressed", "true"); $("kTodos").setAttribute("aria-pressed", "false"); render(); };
   $("kTodos").onclick = () => { kView = "todos"; $("kTodos").setAttribute("aria-pressed", "true"); $("kMes").setAttribute("aria-pressed", "false"); render(); };
   $("kCartoes").addEventListener("click", (e) => { const b = e.target.closest("[data-kcartao]"); if (b) { kCartao = b.dataset.kcartao; render(); } });
