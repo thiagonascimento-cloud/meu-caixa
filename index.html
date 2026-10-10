@@ -1012,6 +1012,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (tipo === "provento") {
       var ehSal = P.indexOf("salario") >= 0;
       var desc = cap(resto.replace(/^(recebi|provento|entrou|recebimento)\s*/i, "")) || (ehSal ? "Salário" : "Provento");
+      if (sem(desc) === "salario") desc = "Salário";
       var tipoP = ehSal ? "Salário" : /freela|extra|bico/.test(sem(resto)) ? "Extra / freela" : "Outros";
       return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, valor: valor },
         resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR };
