@@ -165,6 +165,15 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.visao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: -8px; }
+.visao p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+.visao p b { color: var(--fg); }
+.aberto { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.86rem; display: grid; gap: 4px; }
+.aberto.tem { background: var(--owe-soft); }
+.aberto.ok { background: var(--accent-soft); }
+.aberto strong { font-family: var(--font-display); }
+.aberto ul { margin: 0; padding-left: 18px; }
+.aberto .num { font-family: var(--font-mono); }
 .quick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
 .quick input { font-size: 1rem; }
 .quick .primary { padding: 9px 18px; }
@@ -245,6 +254,13 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       <button id="nextMonth" aria-label="Próximo mês">›</button>
     </div>
   </header>
+  <div class="visao">
+    <div class="seg" role="group" aria-label="Ver os valores por">
+      <button type="button" data-visao="pag" aria-pressed="true">Mês do pagamento</button>
+      <button type="button" data-visao="compra" aria-pressed="false">Mês da compra</button>
+    </div>
+    <p id="visaoTxt"></p>
+  </div>
 
   <form class="quick" id="fRapido" autocomplete="off">
     <label class="field"><span>Lançamento rápido</span>
@@ -281,8 +297,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   <p class="toast" id="bkToast" role="status"></p>
 
   <section class="summary" aria-label="Resumo do mês">
-    <div class="stat"><span class="label">Proventos do mês</span><span class="v in num" id="sumIn">R$ 0,00</span><span class="s" id="sumInS">—</span></div>
-    <div class="stat"><span class="label">Fatura do mês</span><span class="v out num" id="sumCard">R$ 0,00</span><span class="s" id="sumCardS">—</span></div>
+    <div class="stat"><span class="label" id="sumInL">Proventos do mês</span><span class="v in num" id="sumIn">R$ 0,00</span><span class="s" id="sumInS">—</span></div>
+    <div class="stat"><span class="label" id="sumCardL">Fatura do mês</span><span class="v out num" id="sumCard">R$ 0,00</span><span class="s" id="sumCardS">—</span></div>
     <div class="stat"><span class="label">Sobra (seu gasto)</span><span class="v num" id="sumNet">R$ 0,00</span><span class="s" id="sumNetS">proventos − seus gastos</span></div>
     <div class="stat"><span class="label">Te devem no mês</span><span class="v owe num" id="sumOwe">R$ 0,00</span><span class="s" id="sumOweS">—</span></div>
   </section>
@@ -339,6 +355,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             <label class="field"><span>Data</span><input id="pData" type="date" required></label>
             <label class="field"><span>Valor (R$)</span><input id="pValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
           </div>
+          <label class="field"><span>Entra no caixa em</span>
+            <select id="pMes"><option value="1">mês seguinte</option><option value="0">mês da data</option></select>
+          </label>
           <div class="formbtns"><button class="primary" type="submit" id="pBtn">Adicionar provento</button><button type="button" class="ghost" id="pCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="pToast" role="status"></p>
         </form>
@@ -364,6 +383,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             </label>
             <label class="field"><span>Dia do vencimento</span><input id="cVenc" type="number" min="1" max="31" inputmode="numeric"></label>
           </div>
+          <label class="check"><input type="checkbox" id="cProx" checked> A fatura vence no mês seguinte ao da compra</label>
           <div class="field"><span>Cor</span>
             <div class="colors" id="cCores"></div>
           </div>
@@ -489,6 +509,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   const now = new Date();
   let cur = now.getFullYear() * 12 + now.getMonth();
   let view = "mes";
+  let visao = "pag";
   let oView = "mes", oPessoa = "";
   let kView = "mes", kCartao = "";
   let bTipo = "";
@@ -675,7 +696,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   function parcelasNoMes(m) {
     const out = [];
     for (const g of state.gastos) {
-      const n = Math.max(1, g.parcelas | 0), k = m - startMonth(g);
+      const n = Math.max(1, g.parcelas | 0), k = m - (visao === "compra" ? monthIndex(g.data) : startMonth(g));
       if (k >= 0 && k < n) out.push({ g, k, n, v: parcelaValor(g, k) });
     }
     return out.sort((a, b) => b.g.data.localeCompare(a.g.data));
@@ -702,6 +723,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   function delBtn(col, id) {
     return `<span class="acts"><button type="button" class="del" data-edit="${col}" data-id="${esc(id)}">editar</button><button type="button" class="del" data-del="${col}" data-id="${esc(id)}">excluir</button></span>`;
   }
+  const venceProx = (c) => !!c && c.venceProxMes !== false;
+  // Mês em que o provento entra no caixa (campo "mes"); sem ele, o mês da data.
+  const provMesIdx = (p) => (typeof p.mes === "string" && /^\d{4}-\d{2}$/.test(p.mes) ? monthIndex(p.mes) : monthIndex(p.data));
   const faturaPaga = (c, ym) => !!(c && Array.isArray(c.pagos) && c.pagos.includes(ym));
   function cardPill(g) {
     if (!g.cartao) return "";
@@ -716,10 +740,16 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("catMonth").textContent = mLabel;
     $("provMonth").textContent = mLabel;
     $("cardMonth").textContent = mLabel;
+    const ant = MONTHS[(cur + 11) % 12];
+    $("visaoTxt").innerHTML = visao === "pag"
+      ? `<b>${esc(MONTHS[mo])}:</b> o que você paga e recebe em ${MONTHS[mo]}. Nos cartões que vencem no mês seguinte, são as compras de ${ant}.`
+      : `<b>${esc(MONTHS[mo])}:</b> o que você comprou em ${MONTHS[mo]}. Nos cartões que vencem no mês seguinte, isso é pago em ${MONTHS[(cur + 1) % 12]}.`;
+    $("sumCardL").textContent = visao === "pag" ? "Faturas que vencem no mês" : "Comprado no mês";
+    $("sumInL").textContent = visao === "pag" ? "Entra no caixa no mês" : "Proventos do mês";
     renderCartoes();
 
     const parc = parcelasNoMes(cur);
-    const provMes = state.proventos.filter((p) => monthIndex(p.data) === cur).sort((a, b) => b.data.localeCompare(a.data));
+    const provMes = state.proventos.filter((p) => (visao === "compra" ? monthIndex(p.data) : provMesIdx(p)) === cur).sort((a, b) => b.data.localeCompare(a.data));
     const totIn = provMes.reduce((s, p) => s + p.valor, 0);
     const totCard = parc.reduce((s, it) => s + it.v, 0);
     const totDeles = parc.filter((it) => it.g.pessoa).reduce((s, it) => s + it.v, 0);
@@ -762,9 +792,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       : byCard.map((c) => `<div class="fat${c.pago ? " paga" : ""}">
           <div class="fat-n"><span><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}
             <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div></div>
-          <div class="fat-v"><span class="num">${money(c.v)}</span><small>${c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? `a pagar ${money(c.v)}` : "sem fatura"}</small></div>
-          ${c.id ? `<label class="flag" title="Marcar a fatura de ${MONTHS[mo]} como paga"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
-        </div>`).join("");
+          <div class="fat-v"><span class="num">${money(c.v)}</span><small>${visao === "compra" ? (c.id ? `comprado em ${MONTHS[mo]}` : "") : c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? `a pagar ${money(c.v)}` : "sem fatura"}</small></div>
+          ${c.id && visao === "pag" ? `<label class="flag" title="Marcar a fatura de ${MONTHS[mo]} como paga"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
+        </div>`).join("") + caixinhaAberto(byCard, mo);
 
     // devedores
     $("debtors").innerHTML = devs.length === 0
@@ -871,7 +901,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("provList").innerHTML = provMes.length === 0
       ? `<div class="empty">Nenhum provento lançado neste mês. Use a aba "Provento" para registrar salário ou outras entradas.</div>`
       : provMes.map((p) => `<div class="item">${dateCell(p.data)}
-          <div class="who"><div class="t">${esc(p.descricao)}</div><div class="meta"><span>${esc(p.tipo || "")}</span></div></div>
+          <div class="who"><div class="t">${esc(p.descricao)}</div><div class="meta"><span>${esc(p.tipo || "")}</span>${provMesIdx(p) !== monthIndex(p.data) ? `<span>entra em ${MON3[provMesIdx(p) % 12]}/${String(Math.floor(provMesIdx(p) / 12)).slice(2)}</span>` : ""}</div></div>
           <div class="amt"><span class="a in">+ ${money(p.valor)}</span>${delBtn("proventos", p.id)}</div></div>`).join("");
 
     // pagamentos
@@ -889,7 +919,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
 
   // Interpreta uma frase curta ("uber 25,90 nubank", "renner 300 3x inter p/ ana",
   // "recebi 2918,23 salario", "ana pagou 50") e devolve o lançamento pronto.
-  // ctx: { cartoes: [{id, nome}], pessoas: [nomes], hoje: "AAAA-MM-DD" }
+  // ctx: { cartoes: [{id, nome, prox}], pessoas: [nomes], hoje: "AAAA-MM-DD" }
+  // prox = a fatura do cartão vence no mês seguinte ao da compra.
   function interpretarLancamento(texto, ctx) {
     var sem = function (s) { return String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(); };
     var orig = String(texto || "").replace(/\s+/g, " ").trim();
@@ -953,12 +984,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     var marcar = function (i, n) { for (var j = 0; j < n; j++) usado[i + j] = true; };
 
     // cartão (o nome mais longo primeiro)
-    var cartao = "", cartaoNome = "";
+    var cartao = "", cartaoNome = "", cartaoProx = false;
     (ctx.cartoes || []).slice().sort(function (a, b) { return b.nome.length - a.nome.length; }).some(function (c) {
       var i = acharSeq(c.nome);
       if (i < 0) return false;
       marcar(i, sem(c.nome).split(/\s+/).filter(Boolean).length);
-      cartao = c.id; cartaoNome = c.nome; return true;
+      cartao = c.id; cartaoNome = c.nome; cartaoProx = !!c.prox; return true;
     });
 
     // tipo
@@ -966,6 +997,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     var iPagou = P.findIndex(function (w, i) { return !usado[i] && (w === "pagou" || w === "devolveu" || w === "pagamento" || w === "acertou"); });
     if (["recebi", "salario", "provento", "entrou", "recebimento"].indexOf(P[0]) >= 0) tipo = "provento";
     else if (iPagou >= 0) tipo = "pagamento";
+
+    // "este mês" / "neste mês" / "mesmo mês": o provento entra no próprio mês
+    var mesmoMes = false;
+    P.forEach(function (w, i) {
+      if ((w === "este" || w === "neste" || w === "mesmo") && P[i + 1] === "mes" && !usado[i] && !usado[i + 1]) { mesmoMes = true; usado[i] = usado[i + 1] = true; }
+    });
 
     // pessoa: nomes já usados no app, ou "p/ Ana", "pra Ana", "para Ana"
     var pessoa = "";
@@ -1006,7 +1043,10 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
 
     if (valor === null) return { erro: "Não achei o valor. Escreva, por exemplo: uber 25,90 nubank" };
-    var mes = data.slice(0, 7);
+    var MES3 = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    var somaMes = function (ym, n) { var t = +ym.slice(0, 4) * 12 + (+ym.slice(5, 7) - 1) + n; return Math.floor(t / 12) + "-" + pad(t % 12 + 1); };
+    var mesTxt = function (ym) { return MES3[+ym.slice(5, 7) - 1] + "/" + ym.slice(2, 4); };
+    var mes = somaMes(data.slice(0, 7), cartaoProx ? 1 : 0);
     var fmt = function (v) { return "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
     var dataBR = data.slice(8, 10) + "/" + data.slice(5, 7);
     if (tipo === "provento") {
@@ -1014,8 +1054,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       var desc = cap(resto.replace(/^(recebi|provento|entrou|recebimento)\s*/i, "")) || (ehSal ? "Salário" : "Provento");
       if (sem(desc) === "salario") desc = "Salário";
       var tipoP = ehSal ? "Salário" : /freela|extra|bico/.test(sem(resto)) ? "Extra / freela" : "Outros";
-      return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, valor: valor },
-        resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR };
+      var mesP = somaMes(data.slice(0, 7), mesmoMes ? 0 : 1);
+      return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, mes: mesP, valor: valor },
+        resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR + " · entra em " + mesTxt(mesP) };
     }
     if (tipo === "pagamento") {
       if (!pessoa) return { erro: "Diga quem pagou. Exemplo: ana pagou 50" };
@@ -1024,7 +1065,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     }
     var marca = cap(resto) || "Gasto";
     return { col: "gastos", doc: { marca: marca, data: data, mes: mes, categoria: categoria, valor: valor, parcelas: parcelas, cartao: cartao, pessoa: pessoa },
-      resumo: "Gasto: " + marca + " · " + fmt(valor) + (parcelas > 1 ? " em " + parcelas + "x" : "") + " · " + (cartaoNome || "sem cartão") + " · " + categoria + (pessoa ? " · de " + pessoa : "") + " · " + dataBR };
+      resumo: "Gasto: " + marca + " · " + fmt(valor) + (parcelas > 1 ? " em " + parcelas + "x" : "") + " · " + (cartaoNome || "sem cartão") + " · " + categoria + (pessoa ? " · de " + pessoa : "") + " · " + dataBR + " · fatura de " + mesTxt(mes) };
   }
 
   // ---------- procurar ----------
@@ -1051,7 +1092,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     }
     if (!bTipo || bTipo === "proventos") for (const p of state.proventos) {
       const texto = semAcento([p.descricao, p.tipo, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "provento"].join(" "));
-      if (casa(texto, [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: monthIndex(p.data), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento</span><span>${esc(p.tipo || "")}</span>` });
+      if (casa(texto, [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: provMesIdx(p), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento</span><span>${esc(p.tipo || "")}</span>` });
     }
     if (!bTipo || bTipo === "pagamentos") for (const p of state.pagamentos) {
       const texto = semAcento([p.pessoa, p.obs, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "pagamento recebido"].join(" "));
@@ -1071,25 +1112,46 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
         + (res.length > 1 ? `<p class="hint">Soma dos resultados: <b>${money(total)}</b></p>` : "");
   }
 
+  // Depois que alguma fatura do mês é marcada como paga, mostra o que ainda falta pagar.
+  function caixinhaAberto(byCard, mo) {
+    if (visao !== "pag") return `<p class="hint">Vendo por mês da compra. Para marcar faturas pagas, volte para "Mês do pagamento".</p>`;
+    const comFatura = byCard.filter((c) => c.id && c.v > 0.004);
+    if (!comFatura.some((c) => c.pago)) return "";
+    const abertos = comFatura.filter((c) => !c.pago);
+    if (!abertos.length) return `<div class="aberto ok"><strong>Tudo pago em ${MONTHS[mo]}</strong><span>Todas as faturas que vencem no mês estão marcadas como pagas.</span></div>`;
+    const tot = abertos.reduce((s, c) => s + c.v, 0);
+    return `<div class="aberto tem"><strong>Ficou em aberto em ${MONTHS[mo]}: <span class="num">${money(tot)}</span></strong>
+      <ul>${abertos.map((c) => `<li>${esc(c.nome)}: <span class="num">${money(c.v)}</span></li>`).join("")}</ul></div>`;
+  }
+
   function renderCartoes() {
     const cards = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome));
     const gSel = $("gCartao"), prev = gSel.value;
     gSel.innerHTML = cards.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join("")
       + `<option value="">${cards.length ? "Outro / sem cartão" : "Nenhum cartão cadastrado"}</option>`;
     gSel.value = cards.some((c) => c.id === prev) || prev === "" && gSel.dataset.touched ? prev : (cards[0] ? cards[0].id : "");
+    // Enquanto a pessoa não escolheu a fatura na mão, ela segue a regra do cartão selecionado.
+    if (!editando.gastos && !$("gFatura").dataset.touched) { $("gFatura").value = venceProx(cardById(gSel.value)) ? "1" : "0"; updHint(); }
 
     const uso = (id) => state.gastos.filter((g) => g.cartao === id).length;
     $("cardList").innerHTML = cards.length === 0
       ? `<div class="empty">Nenhum cartão cadastrado ainda.</div>`
       : `<span class="label">Seus cartões</span>` + cards.map((c) => `<div class="cardrow">
           <div><div class="t"><i class="card-swatch" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</div>
-            <div class="meta"><span>${esc(c.bandeira || "")}</span>${c.venc ? `<span>vence dia ${c.venc}</span>` : ""}<span>${uso(c.id)} ${uso(c.id) === 1 ? "gasto" : "gastos"}</span></div>
+            <div class="meta"><span>${esc(c.bandeira || "")}</span>${c.venc ? `<span>vence dia ${c.venc}</span>` : ""}<span>${venceProx(c) ? "vence no mês seguinte" : "vence no mesmo mês"}</span><span>${uso(c.id)} ${uso(c.id) === 1 ? "gasto" : "gastos"}</span></div>
             <label class="flag"><input type="checkbox" data-pagar="${esc(c.id)}"${faturaPaga(c, ymOf(cur)) ? " checked" : ""}> Fatura de ${MONTHS[cur % 12]} paga</label></div>
           ${delBtn("cartoes", c.id)}</div>`).join("");
   }
 
   // ---------- interação ----------
   $("prevMonth").onclick = () => { cur--; render(); };
+  document.querySelectorAll("[data-visao]").forEach((b) => (b.onclick = () => {
+    visao = b.dataset.visao;
+    document.querySelectorAll("[data-visao]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    try { localStorage.setItem("meu-caixa-visao", visao); } catch (e) {}
+    render();
+  }));
+  try { const v = localStorage.getItem("meu-caixa-visao"); if (v === "compra" || v === "pag") { visao = v; document.querySelectorAll("[data-visao]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.visao === v))); } } catch (e) {}
   $("nextMonth").onclick = () => { cur++; render(); };
   $("vMes").onclick = () => { view = "mes"; $("vMes").setAttribute("aria-pressed", "true"); $("vTodos").setAttribute("aria-pressed", "false"); render(); };
   $("oMes").onclick = () => { oView = "mes"; $("oMes").setAttribute("aria-pressed", "true"); $("oTodos").setAttribute("aria-pressed", "false"); render(); };
@@ -1139,6 +1201,15 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     }
     updHint();
   }
+  function updPMes() {
+    const d = $("pData").value; if (!d) return;
+    const m = monthIndex(d);
+    for (const o of $("pMes").options) {
+      const v = +o.value, s = m + v;
+      o.textContent = `${MONTHS[s % 12]} ${Math.floor(s / 12)} (${v === 1 ? "mês seguinte" : v === 0 ? "mês da data" : "como estava"})`;
+    }
+  }
+  $("pData").addEventListener("input", updPMes);
   sel.onchange = updHint; $("gValor").oninput = updHint; $("gFatura").onchange = updHint; $("gData").addEventListener("input", updFatura);
   $("gOutro").onchange = () => { $("gPessoaWrap").hidden = !$("gOutro").checked; $("gPessoa").required = $("gOutro").checked; };
 
@@ -1166,13 +1237,14 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("gOutro").checked = false; $("gPessoaWrap").hidden = true; $("gPessoa").required = false;
     [...$("gFatura").options].forEach((o) => { if (o.value !== "0" && o.value !== "1") o.remove(); });
     [...sel.options].forEach((o) => { if (+o.value > 24) o.remove(); });
-    $("gFatura").value = "0"; $("gData").value = todayISO(); updFatura();
+    delete $("gFatura").dataset.touched;
+    $("gFatura").value = venceProx(cardById($("gCartao").value)) ? "1" : "0"; $("gData").value = todayISO(); updFatura();
   }
   const LIMPAR = {
     gastos: limparGasto,
-    proventos: () => { $("pDesc").value = ""; $("pValor").value = ""; $("pData").value = todayISO(); },
+    proventos: () => { $("pDesc").value = ""; $("pValor").value = ""; $("pData").value = todayISO(); [...$("pMes").options].forEach((o) => { if (o.value !== "0" && o.value !== "1") o.remove(); }); $("pMes").value = "1"; updPMes(); },
     pagamentos: () => { $("qPessoa").value = ""; $("qValor").value = ""; $("qObs").value = ""; $("qData").value = todayISO(); },
-    cartoes: () => { $("cNome").value = ""; $("cVenc").value = ""; },
+    cartoes: () => { $("cNome").value = ""; $("cVenc").value = ""; $("cProx").checked = true; },
   };
   function cancelarEdicao(col) { setEdit(col, null); LIMPAR[col](); }
   Object.keys(EDIT).forEach((col) => ($(EDIT[col].cancel).onclick = () => cancelarEdicao(col)));
@@ -1196,10 +1268,13 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       updFatura();
     } else if (col === "proventos") {
       $("pDesc").value = doc.descricao || ""; $("pTipo").value = doc.tipo || "Outros"; $("pData").value = doc.data; $("pValor").value = (+doc.valor).toFixed(2);
+      const offP = provMesIdx(doc) - monthIndex(doc.data);
+      if (offP !== 0 && offP !== 1) $("pMes").insertAdjacentHTML("beforeend", `<option value="${offP}"></option>`);
+      $("pMes").value = String(offP); updPMes();
     } else if (col === "pagamentos") {
       $("qPessoa").value = doc.pessoa || ""; $("qData").value = doc.data; $("qValor").value = (+doc.valor).toFixed(2); $("qObs").value = doc.obs || "";
     } else if (col === "cartoes") {
-      $("cNome").value = doc.nome || ""; $("cBandeira").value = doc.bandeira || "Outra"; $("cVenc").value = doc.venc || "";
+      $("cNome").value = doc.nome || ""; $("cBandeira").value = doc.bandeira || "Outra"; $("cVenc").value = doc.venc || ""; $("cProx").checked = venceProx(doc);
       document.querySelectorAll('input[name="cor"]').forEach((r) => (r.checked = r.value === doc.cor));
     }
     setEdit(col, id);
@@ -1246,8 +1321,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   $("fProv").onsubmit = (e) => {
     e.preventDefault();
     const doc = { descricao: $("pDesc").value.trim(), tipo: $("pTipo").value, data: $("pData").value, valor: Math.round(parseFloat($("pValor").value) * 100) / 100, criado: Date.now() };
+    if (doc.data) doc.mes = ymOf(monthIndex(doc.data) + +$("pMes").value);
     if (!doc.descricao || !(doc.valor > 0)) return;
-    save("proventos", doc, "pToast", "Provento adicionado.", () => { LIMPAR.proventos(); cur = monthIndex(doc.data); render(); });
+    save("proventos", doc, "pToast", "Provento adicionado.", () => { LIMPAR.proventos(); cur = provMesIdx(doc); render(); });
   };
   $("fPag").onsubmit = (e) => {
     e.preventDefault();
@@ -1255,13 +1331,18 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (!doc.pessoa || !(doc.valor > 0)) return;
     save("pagamentos", doc, "qToast", `Pagamento de ${doc.pessoa} registrado.`, () => { LIMPAR.pagamentos(); });
   };
-  $("gCartao").onchange = () => { $("gCartao").dataset.touched = "1"; };
+  $("gCartao").onchange = () => {
+    $("gCartao").dataset.touched = "1";
+    $("gFatura").value = venceProx(cardById($("gCartao").value)) ? "1" : "0"; updHint();
+  };
+  $("gFatura").addEventListener("change", () => { $("gFatura").dataset.touched = "1"; });
   $("cCores").innerHTML = CARD_COLORS.map((c, i) => `<label><input type="radio" name="cor" id="cor-${i}" value="${c}"${i === 0 ? " checked" : ""} aria-label="Cor ${i + 1}"><span style="background:${c}"></span></label>`).join("");
   $("fCartao").onsubmit = (e) => {
     e.preventDefault();
     const venc = parseInt($("cVenc").value, 10);
     const doc = { nome: $("cNome").value.trim(), bandeira: $("cBandeira").value, venc: venc >= 1 && venc <= 31 ? venc : null,
-      cor: document.querySelector('input[name="cor"]:checked').value, criado: Date.now() };
+      cor: document.querySelector('input[name="cor"]:checked').value, venceProxMes: $("cProx").checked, criado: Date.now() };
+    if (editando.cartoes) { const o = cardById(editando.cartoes); if (o && Array.isArray(o.pagos)) doc.pagos = o.pagos; }
     if (!doc.nome) return;
     if (state.cartoes.some((c) => c.id !== editando.cartoes && keyName(c.nome) === keyName(doc.nome))) { toast("cToast", "Já existe um cartão com esse nome.", true); return; }
     save("cartoes", doc, "cToast", `Cartão ${doc.nome} cadastrado.`, () => { LIMPAR.cartoes(); });
@@ -1320,7 +1401,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   // ---------- lançamento rápido ----------
   function ctxRapido() {
     const pessoas = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa && x.pessoa.trim()).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
-    return { cartoes: state.cartoes.map((c) => ({ id: c.id, nome: c.nome })), pessoas, hoje: todayISO() };
+    return { cartoes: state.cartoes.map((c) => ({ id: c.id, nome: c.nome, prox: venceProx(c) })), pessoas, hoje: todayISO() };
   }
   function prevRapido() {
     const t = $("rText").value.trim(), el = $("rPrev");
@@ -1340,7 +1421,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     try {
       const id = await store.add(r.col, doc);
       $("rText").value = ""; prevRapido();
-      cur = r.col === "gastos" ? startMonth(doc) : monthIndex(doc.data); render();
+      cur = r.col === "gastos" ? startMonth(doc) : r.col === "proventos" ? provMesIdx(doc) : monthIndex(doc.data); render();
       avisar(`Lançado. ${r.resumo}`, () => store.del(r.col, id));
     } catch (err) { $("rPrev").className = "hint err"; $("rPrev").textContent = "Não foi possível salvar. Verifique a conexão e tente de novo."; }
   };

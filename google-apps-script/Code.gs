@@ -230,7 +230,7 @@ function tratarMensagem(chat, texto) {
   const nomes = {};
   dados.gastos.concat(dados.pagamentos).forEach(function (x) { if (x.pessoa && x.pessoa.trim()) nomes[x.pessoa.trim().toLowerCase()] = x.pessoa.trim(); });
   const r = interpretarLancamento(texto, {
-    cartoes: dados.cartoes.map(function (c) { return { id: c.id, nome: c.nome }; }),
+    cartoes: dados.cartoes.map(function (c) { return { id: c.id, nome: c.nome, prox: c.venceProxMes !== false }; }),
     pessoas: Object.keys(nomes).map(function (k) { return nomes[k]; }),
     hoje: hojeISO(),
   });
@@ -282,11 +282,12 @@ function resumoDoMes(ym) {
     const kp = p.pessoa.trim().toLowerCase();
     if (porPessoa[kp]) porPessoa[kp].pago += p.valor;
   });
-  const entrou = d.proventos.filter(function (p) { return p.data.slice(0, 7) === ym; }).reduce(function (s, p) { return s + p.valor; }, 0);
-  const linhas = ["Meu Caixa – " + MESES[m % 12] + " de " + Math.floor(m / 12), ""];
-  linhas.push("Seus gastos no mês: " + fmt(meu));
+  // Provento conta no mês em que entra no caixa (campo "mes"); sem ele, no mês da data.
+  const entrou = d.proventos.filter(function (p) { return (/^\d{4}-\d{2}$/.test(p.mes) ? p.mes : p.data.slice(0, 7)) === ym; }).reduce(function (s, p) { return s + p.valor; }, 0);
+  const linhas = ["Meu Caixa – " + MESES[m % 12] + " de " + Math.floor(m / 12), "O que você paga e recebe neste mês.", ""];
+  linhas.push("Seus gastos que vencem no mês: " + fmt(meu));
   linhas.push("De outras pessoas: " + fmt(outros));
-  linhas.push("Total das faturas: " + fmt(meu + outros));
+  linhas.push("Total das faturas do mês: " + fmt(meu + outros));
   linhas.push("");
   linhas.push("Por cartão:");
   const nomesC = Object.keys(porCartao).sort();
@@ -305,14 +306,15 @@ function resumoDoMes(ym) {
     });
   }
   linhas.push("");
-  linhas.push("Proventos: " + fmt(entrou) + " · sobra: " + fmt(entrou - meu));
+  linhas.push("Entra no caixa: " + fmt(entrou) + " · sobra: " + fmt(entrou - meu));
   return linhas.join("\n");
 }
 
 /* ============ Interpretador de frases (o mesmo do app) ============ */
 // Interpreta uma frase curta ("uber 25,90 nubank", "renner 300 3x inter p/ ana",
 // "recebi 2918,23 salario", "ana pagou 50") e devolve o lançamento pronto.
-// ctx: { cartoes: [{id, nome}], pessoas: [nomes], hoje: "AAAA-MM-DD" }
+// ctx: { cartoes: [{id, nome, prox}], pessoas: [nomes], hoje: "AAAA-MM-DD" }
+// prox = a fatura do cartão vence no mês seguinte ao da compra.
 function interpretarLancamento(texto, ctx) {
   var sem = function (s) { return String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase(); };
   var orig = String(texto || "").replace(/\s+/g, " ").trim();
@@ -376,12 +378,12 @@ function interpretarLancamento(texto, ctx) {
   var marcar = function (i, n) { for (var j = 0; j < n; j++) usado[i + j] = true; };
 
   // cartão (o nome mais longo primeiro)
-  var cartao = "", cartaoNome = "";
+  var cartao = "", cartaoNome = "", cartaoProx = false;
   (ctx.cartoes || []).slice().sort(function (a, b) { return b.nome.length - a.nome.length; }).some(function (c) {
     var i = acharSeq(c.nome);
     if (i < 0) return false;
     marcar(i, sem(c.nome).split(/\s+/).filter(Boolean).length);
-    cartao = c.id; cartaoNome = c.nome; return true;
+    cartao = c.id; cartaoNome = c.nome; cartaoProx = !!c.prox; return true;
   });
 
   // tipo
@@ -389,6 +391,12 @@ function interpretarLancamento(texto, ctx) {
   var iPagou = P.findIndex(function (w, i) { return !usado[i] && (w === "pagou" || w === "devolveu" || w === "pagamento" || w === "acertou"); });
   if (["recebi", "salario", "provento", "entrou", "recebimento"].indexOf(P[0]) >= 0) tipo = "provento";
   else if (iPagou >= 0) tipo = "pagamento";
+
+  // "este mês" / "neste mês" / "mesmo mês": o provento entra no próprio mês
+  var mesmoMes = false;
+  P.forEach(function (w, i) {
+    if ((w === "este" || w === "neste" || w === "mesmo") && P[i + 1] === "mes" && !usado[i] && !usado[i + 1]) { mesmoMes = true; usado[i] = usado[i + 1] = true; }
+  });
 
   // pessoa: nomes já usados no app, ou "p/ Ana", "pra Ana", "para Ana"
   var pessoa = "";
@@ -429,7 +437,10 @@ function interpretarLancamento(texto, ctx) {
   var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
 
   if (valor === null) return { erro: "Não achei o valor. Escreva, por exemplo: uber 25,90 nubank" };
-  var mes = data.slice(0, 7);
+  var MES3 = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  var somaMes = function (ym, n) { var t = +ym.slice(0, 4) * 12 + (+ym.slice(5, 7) - 1) + n; return Math.floor(t / 12) + "-" + pad(t % 12 + 1); };
+  var mesTxt = function (ym) { return MES3[+ym.slice(5, 7) - 1] + "/" + ym.slice(2, 4); };
+  var mes = somaMes(data.slice(0, 7), cartaoProx ? 1 : 0);
   var fmt = function (v) { return "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
   var dataBR = data.slice(8, 10) + "/" + data.slice(5, 7);
   if (tipo === "provento") {
@@ -437,8 +448,9 @@ function interpretarLancamento(texto, ctx) {
     var desc = cap(resto.replace(/^(recebi|provento|entrou|recebimento)\s*/i, "")) || (ehSal ? "Salário" : "Provento");
     if (sem(desc) === "salario") desc = "Salário";
     var tipoP = ehSal ? "Salário" : /freela|extra|bico/.test(sem(resto)) ? "Extra / freela" : "Outros";
-    return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, valor: valor },
-      resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR };
+    var mesP = somaMes(data.slice(0, 7), mesmoMes ? 0 : 1);
+    return { col: "proventos", doc: { descricao: desc, tipo: tipoP, data: data, mes: mesP, valor: valor },
+      resumo: "Provento: " + desc + " · " + fmt(valor) + " · " + dataBR + " · entra em " + mesTxt(mesP) };
   }
   if (tipo === "pagamento") {
     if (!pessoa) return { erro: "Diga quem pagou. Exemplo: ana pagou 50" };
@@ -447,5 +459,5 @@ function interpretarLancamento(texto, ctx) {
   }
   var marca = cap(resto) || "Gasto";
   return { col: "gastos", doc: { marca: marca, data: data, mes: mes, categoria: categoria, valor: valor, parcelas: parcelas, cartao: cartao, pessoa: pessoa },
-    resumo: "Gasto: " + marca + " · " + fmt(valor) + (parcelas > 1 ? " em " + parcelas + "x" : "") + " · " + (cartaoNome || "sem cartão") + " · " + categoria + (pessoa ? " · de " + pessoa : "") + " · " + dataBR };
+    resumo: "Gasto: " + marca + " · " + fmt(valor) + (parcelas > 1 ? " em " + parcelas + "x" : "") + " · " + (cartaoNome || "sem cartão") + " · " + categoria + (pessoa ? " · de " + pessoa : "") + " · " + dataBR + " · fatura de " + mesTxt(mes) };
 }
