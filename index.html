@@ -165,6 +165,48 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.ctiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.ctiles:empty { display: none; }
+.ctile { text-align: left; display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); border-left: 5px solid var(--cor, var(--line)); background: color-mix(in srgb, var(--cor, var(--line)) 10%, var(--surface)); color: var(--fg); cursor: pointer; min-width: 0; }
+.ctile:hover { border-color: var(--cor, var(--accent)); }
+.ctile[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--cor, var(--accent)); }
+.ctile .cn { font-family: var(--font-display); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctile .cv { font-family: var(--font-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.ctile small { color: var(--muted); font-size: 0.75rem; }
+.ctile small b { color: var(--owe); font-weight: 600; }
+.ctile small b.ok { color: var(--in); }
+.cdet { border-top: 1px solid var(--line); padding-top: 12px; }
+.cdet .ohead .n { display: inline-flex; align-items: center; gap: 4px; }
+.evol { gap: 10px; }
+.evol-resumo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; font-size: 0.92rem; color: var(--muted); }
+.evol-resumo .big { font-family: var(--font-mono); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.evol-resumo .big.in { color: var(--in); } .evol-resumo .big.out { color: var(--out); }
+.evol-resumo b { color: var(--fg); font-family: var(--font-mono); font-weight: 500; }
+.evol-chart svg { width: 100%; height: auto; display: block; }
+.orc { display: grid; gap: 6px; width: 100%; }
+.orc-n { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.orc-bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.orc-fill { height: 100%; border-radius: 6px; background: var(--in); }
+.orc-fill.alerta { background: var(--owe); }
+.orc-fill.estourou { background: var(--out); }
+.orc .hint { margin: 2px 0 0; }
+.evol-chart .bar { fill: var(--out); cursor: pointer; }
+.evol-chart .bar.prev { fill: var(--out); opacity: 0.4; }
+.evol-chart .bar.cur { fill: var(--accent); }
+.evol-chart .bar.cur.prev { opacity: 0.7; }
+.evol-chart .prov { stroke: var(--in); stroke-width: 3; stroke-linecap: round; }
+.evol-chart .grid-l { stroke: var(--line); stroke-width: 1; }
+.evol-chart text { fill: var(--muted); font-family: var(--font-body); font-size: 11px; }
+.evol-chart text.cur { fill: var(--fg); font-weight: 700; }
+.evol-chart text.val { fill: var(--fg); font-family: var(--font-mono); font-size: 11px; }
+.evol-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.76rem; color: var(--muted); }
+.lg { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.lg.gasto { background: var(--out); } .lg.prev { background: var(--out); opacity: 0.4; } .lg.prov { height: 3px; background: var(--in); vertical-align: 2px; }
+.fixo-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 8px; align-items: center; }
+.fixos { display: grid; gap: 8px; }
+.fixos .tot { font-size: 0.86rem; color: var(--muted); }
+.fixos .tot b { color: var(--in); font-family: var(--font-mono); font-weight: 500; }
+.fixos-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .dup { background: var(--owe-soft); border-radius: 8px; padding: 10px 12px; font-size: 0.86rem; display: grid; gap: 6px; }
 .dup strong { font-family: var(--font-display); }
 .dup ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
@@ -310,6 +352,13 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     <div class="stat"><span class="label" id="sumCardL">Fatura do mês</span><span class="v out num" id="sumCard">R$ 0,00</span><span class="s" id="sumCardS">—</span></div>
     <div class="stat"><span class="label">Sobra (seu gasto)</span><span class="v num" id="sumNet">R$ 0,00</span><span class="s" id="sumNetS">proventos − seus gastos</span></div>
     <div class="stat"><span class="label">Te devem no mês</span><span class="v owe num" id="sumOwe">R$ 0,00</span><span class="s" id="sumOweS">—</span></div>
+  </section>
+
+  <section class="panel evol" aria-label="Evolução dos meus gastos">
+    <div class="panel-head"><h2>Evolução dos meus gastos</h2><span class="label">por mês do pagamento</span></div>
+    <div class="evol-resumo" id="evolResumo"></div>
+    <div class="evol-chart" id="evolChart"></div>
+    <div class="evol-leg"><span><i class="lg gasto"></i>meus gastos</span><span><i class="lg prev"></i>previsto (parcelas já lançadas)</span><span><i class="lg prov"></i>proventos</span></div>
   </section>
 
   <nav class="abas" role="tablist" aria-label="Seções">
@@ -481,7 +530,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             <button id="kTodos" aria-pressed="false">Todas as compras</button>
           </div>
         </div>
-        <div class="chips" id="kCartoes" role="group" aria-label="Cartão"></div>
+        <div class="ctiles" id="kCartoes" role="group" aria-label="Cartões"></div>
         <div id="porCartao"></div>
       </section>
       <section class="panel" aria-label="Gastos" hidden>
@@ -509,8 +558,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             <button id="mTodos" aria-pressed="false">Todas as compras</button>
           </div>
         </div>
-        <p class="hint">Só o que é seu: os gastos de outras pessoas ficam na aba Terceiros.</p>
-        <div class="chips" id="mCartoes" role="group" aria-label="Cartão"></div>
+        <p class="hint">Só o que é seu: os gastos de outras pessoas ficam na aba Terceiros. Toque num cartão para ver o demonstrativo.</p>
+        <div class="ctiles" id="mCartoes" role="group" aria-label="Cartões"></div>
         <div id="meusCartao"></div>
       </section>
       </div>
@@ -519,6 +568,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
         <div class="panel-head"><h2>Meus gastos por categoria</h2><span class="label" id="catMonth"></span></div>
         <div class="bars" id="bars"></div>
       </section>
+      <section class="panel" aria-label="Proventos fixos">
+        <div class="panel-head"><h2>Proventos fixos</h2><span class="label">todo mês</span></div>
+        <p class="hint">Entram sozinhos em todos os meses. Se num mês você lançar um provento com o mesmo nome (por exemplo, um salário diferente), ele vale no lugar do fixo naquele mês.</p>
+        <div id="fixos"></div>
+      </section>
+
       <section class="panel" aria-label="Proventos">
         <div class="panel-head"><h2>Proventos</h2><span class="label" id="provMonth"></span></div>
         <div class="list" id="provList"></div>
@@ -783,6 +838,30 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   const venceProx = (c) => !!c && c.venceProxMes !== false;
   // Mês em que o provento entra no caixa (campo "mes"); sem ele, o mês da data.
   const provMesIdx = (p) => (typeof p.mes === "string" && /^\d{4}-\d{2}$/.test(p.mes) ? monthIndex(p.mes) : monthIndex(p.data));
+  // ---- proventos fixos (docs de provento com fixo: true; valem de "desde" em diante) ----
+  const ehFixo = (p) => p && p.fixo === true;
+  const fixos = () => state.proventos.filter(ehFixo).sort((a, b) => (b.valor || 0) - (a.valor || 0));
+  const semAc = (t) => String(t ?? "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  function fixosDoMes(m) {
+    const lancados = state.proventos.filter((p) => !ehFixo(p) && provMesIdx(p) === m).map((p) => semAc(p.descricao));
+    return fixos().filter((f) => {
+      if (f.desde && /^\d{4}-\d{2}$/.test(f.desde) && monthIndex(f.desde) > m) return false;
+      const n = semAc(f.descricao);
+      return !lancados.some((l) => l === n || l.includes(n));
+    });
+  }
+  const proventosDoMes = (m) => state.proventos.filter((p) => !ehFixo(p) && provMesIdx(p) === m).reduce((s, p) => s + p.valor, 0)
+    + fixosDoMes(m).reduce((s, f) => s + f.valor, 0);
+  // Meus gastos (sem terceiros) que vencem no mês m.
+  function meusGastosDoMes(m) {
+    let t = 0;
+    for (const g of state.gastos) {
+      if (g.pessoa && g.pessoa.trim()) continue;
+      const n = Math.max(1, g.parcelas | 0), k = m - startMonth(g);
+      if (k >= 0 && k < n) t += parcelaValor(g, k);
+    }
+    return t;
+  }
   const faturaPaga = (c, ym) => !!(c && Array.isArray(c.pagos) && c.pagos.includes(ym));
   function cardPill(g) {
     if (!g.cartao) return "";
@@ -806,8 +885,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     renderCartoes();
 
     const parc = parcelasNoMes(cur);
-    const provMes = state.proventos.filter((p) => (visao === "compra" ? monthIndex(p.data) : provMesIdx(p)) === cur).sort((a, b) => b.data.localeCompare(a.data));
-    const totIn = provMes.reduce((s, p) => s + p.valor, 0);
+    const provMes = state.proventos.filter((p) => !ehFixo(p) && (visao === "compra" ? monthIndex(p.data) : provMesIdx(p)) === cur).sort((a, b) => b.data.localeCompare(a.data));
+    const fixMes = fixosDoMes(cur);
+    const totIn = provMes.reduce((s, p) => s + p.valor, 0) + fixMes.reduce((s, f) => s + f.valor, 0);
     const totCard = parc.reduce((s, it) => s + it.v, 0);
     const totDeles = parc.filter((it) => it.g.pessoa).reduce((s, it) => s + it.v, 0);
     const meu = totCard - totDeles;
@@ -815,7 +895,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     const totOwe = devs.reduce((s, d) => s + Math.max(0, d.saldo), 0);
 
     $("sumIn").textContent = money(totIn);
-    $("sumInS").textContent = provMes.length ? `${provMes.length} ${provMes.length === 1 ? "entrada" : "entradas"}` : "nenhuma entrada";
+    $("sumInS").textContent = (fixMes.length ? `fixos ${money(fixMes.reduce((s, f) => s + f.valor, 0))}` : "") + (provMes.length ? `${fixMes.length ? " + " : ""}${provMes.length} ${provMes.length === 1 ? "lançado" : "lançados"}` : fixMes.length ? "" : "nenhuma entrada");
     $("sumCard").textContent = money(totCard);
     const aPagar = parc.filter((it) => !(cardById(it.g.cartao) && faturaPaga(cardById(it.g.cartao), ymOf(cur)))).reduce((s, it) => s + it.v, 0);
     $("sumCardS").textContent = (aPagar < totCard - 0.004 ? `falta pagar ${money(aPagar)}` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`) + (totDeles > 0 ? ` · ${money(totDeles)} de outras pessoas` : "");
@@ -924,11 +1004,16 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
 
     renderBusca();
     if ($("rText").value.trim()) prevRapido();
+    renderFixos();
+    renderEvolucao();
 
     // proventos
-    $("provList").innerHTML = provMes.length === 0
+    const linhasFixos = fixMes.map((f) => `<div class="item"><div class="date"><b>fixo</b>${MON3[mo]}</div>
+          <div class="who"><div class="t">${esc(f.descricao)}</div><div class="meta"><span>provento fixo · edite em Proventos fixos</span></div></div>
+          <div class="amt"><span class="a in">+ ${money(f.valor)}</span></div></div>`).join("");
+    $("provList").innerHTML = (provMes.length === 0 && !fixMes.length)
       ? `<div class="empty">Nenhum provento lançado neste mês. Use a aba "Provento" para registrar salário ou outras entradas.</div>`
-      : provMes.map((p) => `<div class="item">${dateCell(p.data)}
+      : linhasFixos + provMes.map((p) => `<div class="item">${dateCell(p.data)}
           <div class="who"><div class="t">${esc(p.descricao)}</div><div class="meta"><span>${esc(p.tipo || "")}</span>${provMesIdx(p) !== monthIndex(p.data) ? `<span>entra em ${MON3[provMesIdx(p) % 12]}/${String(Math.floor(provMesIdx(p) / 12)).slice(2)}</span>` : ""}</div></div>
           <div class="amt"><span class="a in">+ ${money(p.valor)}</span>${delBtn("proventos", p.id)}</div></div>`).join("");
 
@@ -1160,12 +1245,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   function painelPorCartao(P, parc, mo) {
     const cartoesOrd = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome));
     const temSemCartao = state.gastos.some((g) => P.filtro(g) && !cardById(g.cartao));
-    const opcoes = [...cartoesOrd.map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, card: c })), ...(temSemCartao ? [{ id: "_sem", nome: "Sem cartão", cor: "var(--cat-outros)", card: null }] : [])];
-    if (P.sel !== "" && !opcoes.some((o) => o.id === P.sel)) P.sel = "";
-    $(P.chips).innerHTML = opcoes.length < 2 ? "" : [{ id: "", nome: "Todos" }, ...opcoes]
-      .map((o) => `<button type="button" data-${P.attr}="${esc(o.id)}" aria-pressed="${o.id === P.sel}">${o.cor ? `<i class="dot" style="background:${esc(o.cor)}"></i>` : ""}${esc(o.nome)}</button>`).join("");
+    const opcoes = [...cartoesOrd.map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, card: c })), ...(temSemCartao ? [{ id: "_sem", nome: "Sem cartão", cor: "#6b7a75", card: null }] : [])];
     const doCartao = (o, g) => P.filtro(g) && (o.id === "_sem" ? !cardById(g.cartao) : g.cartao === o.id);
-    const grupos = opcoes.filter((o) => P.sel === "" || o.id === P.sel).map((o) => {
+    const grupos = opcoes.map((o) => {
       const itens = P.view === "mes"
         ? parc.filter((it) => doCartao(o, it.g)).map((it) => ({ g: it.g, label: it.n > 1 ? `parcela ${it.k + 1}/${it.n}` : "à vista", v: it.v, sub: it.n > 1 ? `total ${money(it.g.valor)}` : "" }))
         : state.gastos.filter((g) => doCartao(o, g)).sort((a, b) => b.data.localeCompare(a.data))
@@ -1175,20 +1257,29 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       const paga = P.view === "mes" && visao === "pag" && o.card && faturaPaga(o.card, ymOf(cur));
       return { o, itens, tot, deles, paga };
     }).filter((gr) => gr.itens.length);
-    const rotulo = P === PAINEIS.meus ? "seu gasto" : P.view === "mes" ? (visao === "pag" ? "fatura" : "comprado") : "comprado";
+    if (P.sel !== "" && !grupos.some((gr) => gr.o.id === P.sel)) P.sel = "";
+    const meus = P === PAINEIS.meus;
+    const status = (gr) => (!meus && P.view === "mes" && visao === "pag" && gr.o.card) ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar</b>`) : "";
+    $(P.chips).innerHTML = grupos.map((gr) => `<button type="button" class="ctile" style="--cor:${esc(gr.o.cor)}" data-${P.attr}="${esc(gr.o.id)}" aria-pressed="${gr.o.id === P.sel}">
+        <span class="cn">${esc(gr.o.nome)}</span><span class="cv">${money(gr.tot)}</span>
+        <small>${gr.itens.length} ${gr.itens.length === 1 ? "gasto" : "gastos"}${!meus && gr.deles > 0 ? ` · ${money(gr.deles)} de outros` : ""}${status(gr)}</small></button>`).join("");
+    const sel = grupos.find((gr) => gr.o.id === P.sel);
+    const rotulo = meus ? "seu gasto" : P.view === "mes" ? (visao === "pag" ? "fatura" : "comprado") : "comprado";
     $(P.lista).innerHTML = !opcoes.length
-      ? `<div class="empty">Cadastre seus cartões na aba Lançar → Cartões e escolha o cartão em cada gasto.</div>`
+      ? `<div class="empty">Cadastre seus cartões em Lançar → Cartões e escolha o cartão em cada gasto.</div>`
       : !grupos.length
-        ? `<div class="empty">Nenhum gasto ${P.sel && P.sel !== "_sem" ? "neste cartão " : ""}${P.view === "mes" ? `em ${MONTHS[mo]}` : "registrado"}.</div>`
-        : grupos.map((gr) => `<div class="ogroup">
-          <div class="ohead"><span class="n"><i class="dot" style="background:${esc(gr.o.cor)}"></i>${esc(gr.o.nome)}</span>
-            <span class="r">${rotulo} ${money(gr.tot)} · ${gr.itens.length} ${gr.itens.length === 1 ? "gasto" : "gastos"}${gr.deles > 0 ? ` · ${money(gr.deles)} de outras pessoas` : ""}${P !== PAINEIS.meus && P.view === "mes" && visao === "pag" && gr.o.card ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar ${money(gr.tot)}</b>`) : ""}</span></div>
-          <div class="list">${gr.itens.map((r) => `<div class="item">${dateCell(r.g.data)}
+        ? `<div class="empty">Nenhum gasto ${P.view === "mes" ? `em ${MONTHS[mo]}` : "registrado"}.</div>`
+        : !sel
+          ? `<p class="hint">Total: <b>${money(grupos.reduce((s, gr) => s + gr.tot, 0))}</b>. Toque num cartão para ver o demonstrativo.</p>`
+          : `<div class="cdet ogroup">
+          <div class="ohead"><span class="n"><i class="dot" style="background:${esc(sel.o.cor)}"></i>Demonstrativo · ${esc(sel.o.nome)}</span>
+            <span class="r">${rotulo} ${money(sel.tot)} · ${sel.itens.length} ${sel.itens.length === 1 ? "gasto" : "gastos"}${!meus && sel.deles > 0 ? ` · ${money(sel.deles)} de outras pessoas` : ""}${status(sel).replace("a pagar", `a pagar ${money(sel.tot)}`)} · <button type="button" class="del" data-fechar="${P.attr}">fechar</button></span></div>
+          <div class="list">${sel.itens.map((r) => `<div class="item">${dateCell(r.g.data)}
               <div class="who"><div class="t">${esc(r.g.marca)}</div>
                 <div class="meta"><span><i class="dot" style="background:${catColor(r.g.categoria)}"></i>${esc(r.g.categoria || "Outros")}</span><span>${r.label}</span>${r.g.pessoa ? `<span class="pill owe">${esc(r.g.pessoa)}</span>` : ""}</div></div>
               <div class="amt"><span class="a out">− ${money(r.v)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ""}${delBtn("gastos", r.g.id)}</div>
             </div>`).join("")}</div>
-        </div>`).join("");
+        </div>`;
   }
 
   function renderCartoes() {
@@ -1246,7 +1337,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   [["k", PAINEIS.todos, "kcartao"], ["m", PAINEIS.meus, "mcartao"]].forEach(([px, P, attr]) => {
     $(px + "Mes").onclick = () => { P.view = "mes"; $(px + "Mes").setAttribute("aria-pressed", "true"); $(px + "Todos").setAttribute("aria-pressed", "false"); render(); };
     $(px + "Todos").onclick = () => { P.view = "todos"; $(px + "Todos").setAttribute("aria-pressed", "true"); $(px + "Mes").setAttribute("aria-pressed", "false"); render(); };
-    $(P.chips).addEventListener("click", (e) => { const b = e.target.closest(`[data-${attr}]`); if (b) { P.sel = b.dataset[attr]; render(); } });
+    $(P.chips).addEventListener("click", (e) => { const b = e.target.closest(`[data-${attr}]`); if (b) { P.sel = P.sel === b.dataset[attr] ? "" : b.dataset[attr]; render(); } });
+    $(P.lista).addEventListener("click", (e) => { if (e.target.closest("[data-fechar]")) { P.sel = ""; render(); } });
   });
   $("oPessoas").addEventListener("click", (e) => { const b = e.target.closest("[data-opessoa]"); if (b) { oPessoa = b.dataset.opessoa; render(); } });
   $("vTodos").onclick = () => { view = "todos"; $("vTodos").setAttribute("aria-pressed", "true"); $("vMes").setAttribute("aria-pressed", "false"); render(); };
@@ -1479,6 +1571,95 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (!fn || !store) return;
     try { await fn(); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Tente de novo."; }
   };
+
+  // ---------- editor dos proventos fixos ----------
+  const FIXOS_SUGERIDOS = [{ descricao: "Salário", valor: 2918.23 }, { descricao: "Home", valor: 210 }, { descricao: "Academia", valor: 80 }];
+  let fixosSujo = false, fixosLinhas = null;
+  function renderFixos() {
+    if (fixosSujo) return; // não apaga o que a pessoa está digitando
+    const atuais = fixos();
+    fixosLinhas = atuais.length ? atuais.map((f) => ({ id: f.id, descricao: f.descricao, valor: f.valor })) : FIXOS_SUGERIDOS.map((f) => ({ ...f }));
+    desenharFixos(!atuais.length);
+  }
+  function desenharFixos(sugestao) {
+    const tot = fixosLinhas.reduce((s, f) => s + (+f.valor || 0), 0);
+    $("fixos").innerHTML = `<div class="fixos">
+      ${sugestao ? `<p class="hint">Sugestão com os valores que você me passou. Ajuste se precisar e toque em Salvar.</p>` : ""}
+      ${fixosLinhas.map((f, i) => `<div class="fixo-row">
+        <input data-fx="descricao" data-i="${i}" value="${esc(f.descricao)}" aria-label="Nome do provento fixo" placeholder="Nome">
+        <input data-fx="valor" data-i="${i}" type="number" step="0.01" min="0" inputmode="decimal" value="${(+f.valor || 0).toFixed(2)}" aria-label="Valor">
+        <button type="button" class="del" data-fxdel="${i}">remover</button></div>`).join("")}
+      <div class="tot">Total fixo por mês: <b>${money(tot)}</b></div>
+      <div class="fixos-btns"><button type="button" class="ghost" id="fxAdd">+ adicionar</button><button type="button" class="primary" id="fxSalvar">${sugestao ? "Salvar proventos fixos" : "Salvar alterações"}</button>${fixosSujo ? `<button type="button" class="ghost" id="fxCancelar">Cancelar</button>` : ""}</div>
+      <p class="toast" id="fxToast" role="status"></p></div>`;
+  }
+  $("fixos").addEventListener("input", (e) => {
+    const el = e.target.closest("[data-fx]"); if (!el) return;
+    fixosLinhas[+el.dataset.i][el.dataset.fx] = el.value;
+    fixosSujo = true;
+    const tot = fixosLinhas.reduce((s, f) => s + (+f.valor || 0), 0);
+    const t = $("fixos").querySelector(".tot b"); if (t) t.textContent = money(tot);
+  });
+  $("fixos").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-fxdel]")) { fixosLinhas.splice(+e.target.closest("[data-fxdel]").dataset.fxdel, 1); fixosSujo = true; desenharFixos(false); return; }
+    if (e.target.closest("#fxAdd")) { fixosLinhas.push({ descricao: "", valor: 0 }); fixosSujo = true; desenharFixos(false); const ins = $("fixos").querySelectorAll('[data-fx="descricao"]'); ins[ins.length - 1].focus(); return; }
+    if (e.target.closest("#fxCancelar")) { fixosSujo = false; renderFixos(); return; }
+    if (!e.target.closest("#fxSalvar") || !store) return;
+    const linhas = fixosLinhas.map((f) => ({ ...f, descricao: String(f.descricao || "").trim(), valor: Math.round((parseFloat(f.valor) || 0) * 100) / 100 })).filter((f) => f.descricao && f.valor > 0);
+    const hoje = todayISO(), desde = hoje.slice(0, 7);
+    try {
+      const atuais = fixos();
+      for (const a of atuais) if (!linhas.some((l) => l.id === a.id)) await store.del("proventos", a.id);
+      for (const l of linhas) {
+        const tipo = /salario/.test(semAc(l.descricao)) ? "Salário" : "Outros";
+        if (l.id) {
+          const o = atuais.find((a) => a.id === l.id);
+          if (o && (o.descricao !== l.descricao || Math.abs(o.valor - l.valor) > 0.004)) { const { id, ...resto } = o; await store.update("proventos", id, { ...resto, descricao: l.descricao, valor: l.valor, tipo }); }
+        } else {
+          await store.add("proventos", { descricao: l.descricao, tipo, data: desde + "-01", mes: desde, valor: l.valor, fixo: true, desde, criado: Date.now() });
+        }
+      }
+      fixosSujo = false; render();
+      toast("fxToast", "Proventos fixos salvos.");
+    } catch (err) { toast("fxToast", "Não foi possível salvar. Tente de novo.", true); }
+  });
+
+  // ---------- evolução dos meus gastos ----------
+  function renderEvolucao() {
+    const mHoje = monthIndex(todayISO());
+    const ini = cur - 5, fim = cur + 2;
+    const meses = []; for (let m = ini; m <= fim; m++) meses.push({ m, g: meusGastosDoMes(m), p: proventosDoMes(m) });
+    const max = Math.max(1, ...meses.map((x) => Math.max(x.g, x.p))) * 1.15;
+    const W = 640, H = 190, top = 18, base = 160, larg = W / meses.length;
+    const y = (v) => base - (v / max) * (base - top);
+    const fmtK = (v) => (v >= 1000 ? (v / 1000).toFixed(1).replace(".", ",") + " mil" : Math.round(v).toString());
+    const bars = meses.map((x, i) => {
+      const cx = i * larg + larg / 2, bw = Math.min(38, larg * 0.55);
+      const cls = `bar${x.m > mHoje ? " prev" : ""}${x.m === cur ? " cur" : ""}`;
+      const nome = `${MON3[x.m % 12]}/${String(Math.floor(x.m / 12)).slice(2)}`;
+      return `<g><title>${nome}: meus gastos ${money(x.g)} · proventos ${money(x.p)}</title>
+        <rect class="${cls}" data-evmes="${x.m}" x="${(cx - bw / 2).toFixed(1)}" y="${y(x.g).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, base - y(x.g)).toFixed(1)}" rx="4"></rect>
+        ${x.p > 0 ? `<line class="prov" x1="${(cx - bw / 2 - 4).toFixed(1)}" x2="${(cx + bw / 2 + 4).toFixed(1)}" y1="${y(x.p).toFixed(1)}" y2="${y(x.p).toFixed(1)}"></line>` : ""}
+        ${x.g > 0 ? `<text class="val" x="${cx.toFixed(1)}" y="${(y(x.g) - 5).toFixed(1)}" text-anchor="middle">${fmtK(x.g)}</text>` : ""}
+        <text class="${x.m === cur ? "cur" : ""}" x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${MON3[x.m % 12]}</text></g>`;
+    }).join("");
+    $("evolChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Meus gastos e proventos de ${MON3[ini % 12]} a ${MON3[fim % 12]}">
+      <line class="grid-l" x1="0" x2="${W}" y1="${base}" y2="${base}"></line>${bars}</svg>`;
+    // Orçamento: o quanto dá para gastar no mês com base só nos proventos fixos.
+    const fixoDe = (m) => fixosDoMes(m).reduce((s, f) => s + f.valor, 0);
+    const lim = fixoDe(cur), g = meusGastosDoMes(cur), resta = lim - g;
+    const pct = lim > 0 ? Math.min(100, Math.round(g / lim * 100)) : 0;
+    const prox = mHoje + 1, limP = fixoDe(prox), restaP = limP - meusGastosDoMes(prox);
+    $("evolResumo").innerHTML = !lim
+      ? `<span>Cadastre seus proventos fixos (aba Meus gastos) para ver quanto ainda pode gastar por mês.</span>`
+      : `<div class="orc">
+          <div class="orc-n"><span>${MONTHS[cur % 12]} · provento fixo <b>${money(lim)}</b></span><span>já comprometido <b>${money(g)}</b> (${pct}%)</span></div>
+          <div class="orc-bar"><div class="orc-fill${resta < 0 ? " estourou" : pct >= 80 ? " alerta" : ""}" style="width:${pct}%"></div></div>
+          <div class="orc-n"><span>${resta >= 0 ? "ainda pode gastar" : "passou do provento fixo em"}</span><span class="big ${resta >= 0 ? "in" : "out"}">${money(Math.abs(resta))}</span></div>
+          ${limP > 0 && prox !== cur ? `<p class="hint">Comprando hoje no cartão, o valor cai em <b>${MONTHS[prox % 12]}</b>: lá ${restaP >= 0 ? `ainda dá para gastar <b>${money(restaP)}</b>` : `já passou <b>${money(-restaP)}</b> do provento fixo`}.</p>` : ""}
+        </div>`;
+  }
+  $("evolChart").addEventListener("click", (e) => { const r = e.target.closest("[data-evmes]"); if (r) { cur = +r.dataset.evmes; render(); } });
 
   // ---------- lançamento repetido ----------
   // Parecido = mesmo valor (total ou de uma parcela), data até 3 dias de diferença e mesmo cartão (quando os dois têm cartão).
