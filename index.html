@@ -1627,21 +1627,21 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   // ---------- evolução dos meus gastos ----------
   function renderEvolucao() {
     const mHoje = monthIndex(todayISO());
-    const ini = cur - 5, fim = cur + 2;
+    const ini = cur - 1, fim = cur + 1;
     const meses = []; for (let m = ini; m <= fim; m++) meses.push({ m, g: meusGastosDoMes(m), p: proventosDoMes(m) });
     const max = Math.max(1, ...meses.map((x) => Math.max(x.g, x.p))) * 1.15;
     const W = 640, H = 190, top = 18, base = 160, larg = W / meses.length;
     const y = (v) => base - (v / max) * (base - top);
-    const fmtK = (v) => (v >= 1000 ? (v / 1000).toFixed(1).replace(".", ",") + " mil" : Math.round(v).toString());
+    const fmtK = (v) => money(v);
     const bars = meses.map((x, i) => {
-      const cx = i * larg + larg / 2, bw = Math.min(38, larg * 0.55);
+      const cx = i * larg + larg / 2, bw = Math.min(90, larg * 0.45);
       const cls = `bar${x.m > mHoje ? " prev" : ""}${x.m === cur ? " cur" : ""}`;
       const nome = `${MON3[x.m % 12]}/${String(Math.floor(x.m / 12)).slice(2)}`;
       return `<g><title>${nome}: meus gastos ${money(x.g)} · proventos ${money(x.p)}</title>
         <rect class="${cls}" data-evmes="${x.m}" x="${(cx - bw / 2).toFixed(1)}" y="${y(x.g).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, base - y(x.g)).toFixed(1)}" rx="4"></rect>
         ${x.p > 0 ? `<line class="prov" x1="${(cx - bw / 2 - 4).toFixed(1)}" x2="${(cx + bw / 2 + 4).toFixed(1)}" y1="${y(x.p).toFixed(1)}" y2="${y(x.p).toFixed(1)}"></line>` : ""}
         ${x.g > 0 ? `<text class="val" x="${cx.toFixed(1)}" y="${(y(x.g) - 5).toFixed(1)}" text-anchor="middle">${fmtK(x.g)}</text>` : ""}
-        <text class="${x.m === cur ? "cur" : ""}" x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${MON3[x.m % 12]}</text></g>`;
+        <text class="${x.m === cur ? "cur" : ""}" x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${x.m === cur ? "este mês · " : ""}${MONTHS[x.m % 12]}</text></g>`;
     }).join("");
     $("evolChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Meus gastos e proventos de ${MON3[ini % 12]} a ${MON3[fim % 12]}">
       <line class="grid-l" x1="0" x2="${W}" y1="${base}" y2="${base}"></line>${bars}</svg>`;
