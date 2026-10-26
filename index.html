@@ -165,6 +165,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.dup { background: var(--owe-soft); border-radius: 8px; padding: 10px 12px; font-size: 0.86rem; display: grid; gap: 6px; }
+.dup strong { font-family: var(--font-display); }
+.dup ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.dup .num { font-family: var(--font-mono); }
 .abas { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 .abas button { border: 0; background: transparent; color: var(--muted); padding: 10px 4px; border-radius: 7px; font-weight: 600; font-size: 0.92rem; }
 .abas button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
@@ -363,6 +367,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <p class="hint" id="gHint">À vista.</p>
           <label class="check"><input type="checkbox" id="gOutro"> Outra pessoa usou meu cartão</label>
           <label class="field" id="gPessoaWrap" hidden><span>Nome da pessoa</span><input id="gPessoa" list="pessoasList" placeholder="Quem usou o cartão"></label>
+          <div class="dup" id="gDup" role="alert" hidden></div>
           <div class="formbtns"><button class="primary" type="submit" id="gBtn">Adicionar gasto</button><button type="button" class="ghost" id="gCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="gToast" role="status"></p>
         </form>
@@ -1308,6 +1313,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("gOutro").checked = false; $("gPessoaWrap").hidden = true; $("gPessoa").required = false;
     [...$("gFatura").options].forEach((o) => { if (o.value !== "0" && o.value !== "1") o.remove(); });
     [...sel.options].forEach((o) => { if (+o.value > 24) o.remove(); });
+    esconderDup();
     delete $("gFatura").dataset.touched;
     $("gFatura").value = venceProx(cardById($("gCartao").value)) ? "1" : "0"; $("gData").value = todayISO(); updFatura();
   }
@@ -1385,6 +1391,9 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (!doc.marca || !doc.data || !(doc.valor > 0)) return;
     doc.mes = ymOf(monthIndex(doc.data) + +$("gFatura").value);
     if (outro && !doc.pessoa) { toast("gToast", "Informe o nome de quem usou o cartão.", true); return; }
+    // Já existe um gasto parecido? Mostra antes; o segundo toque confirma.
+    if (!editando.gastos && parecidos(doc).length && dupOk !== dupSig(doc)) { checarDup(); return; }
+    dupOk = null;
     save("gastos", doc, "gToast", `Gasto adicionado${doc.pessoa ? ` e lançado para ${doc.pessoa}` : ""}.`, () => {
       limparGasto();
       cur = startMonth(doc); render();
@@ -1471,6 +1480,45 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     try { await fn(); } catch (err) { $("foot").textContent = "Não foi possível desfazer. Tente de novo."; }
   };
 
+  // ---------- lançamento repetido ----------
+  // Parecido = mesmo valor (total ou de uma parcela), data até 3 dias de diferença e mesmo cartão (quando os dois têm cartão).
+  function parecidos(doc) {
+    if (!(doc.valor > 0) || !doc.data) return [];
+    const d0 = new Date(doc.data + "T12:00:00");
+    return state.gastos.filter((g) => {
+      if (g.id === editando.gastos) return false;
+      const n = Math.max(1, g.parcelas | 0);
+      const mesmoValor = Math.abs(g.valor - doc.valor) < 0.01 || (n > 1 && (Math.abs(parcelaValor(g, 0) - doc.valor) < 0.01 || Math.abs(parcelaValor(g, 1) - doc.valor) < 0.01));
+      if (!mesmoValor) return false;
+      const dias = Math.abs((new Date(g.data + "T12:00:00") - d0) / 864e5);
+      if (dias > 3) return false;
+      return !doc.cartao || !g.cartao || g.cartao === doc.cartao;
+    }).sort((a, b) => b.data.localeCompare(a.data));
+  }
+  const dupSig = (doc) => [doc.valor, doc.data, doc.cartao || ""].join("|");
+  const descDup = (g) => { const c = cardById(g.cartao); const [y, m, d] = g.data.split("-"); return `${esc(g.marca)} · ${money(g.valor)}${g.parcelas > 1 ? ` em ${g.parcelas}x` : ""} · ${d}/${m} · ${c ? esc(c.nome) : "sem cartão"}${g.pessoa ? ` · de ${esc(g.pessoa)}` : ""}`; };
+  let dupOk = null, rapDupOk = null;
+  function docDoForm() {
+    return { valor: Math.round(parseFloat($("gValor").value) * 100) / 100, data: $("gData").value, cartao: $("gCartao").value };
+  }
+  function esconderDup() {
+    $("gDup").hidden = true; $("gDup").innerHTML = ""; dupOk = null;
+    if (!editando.gastos) $("gBtn").textContent = "Adicionar gasto";
+  }
+  function checarDup() {
+    if (editando.gastos) return esconderDup();
+    const doc = docDoForm(), iguais = parecidos(doc);
+    if (!iguais.length) return esconderDup();
+    $("gDup").hidden = false;
+    $("gDup").innerHTML = `<strong>Parece que este gasto já foi lançado</strong>
+      <ul>${iguais.slice(0, 4).map((g) => `<li>${descDup(g)} <button type="button" class="del" data-edit="gastos" data-id="${esc(g.id)}">abrir</button></li>`).join("")}</ul>
+      <span>Se for o mesmo, não precisa lançar de novo. Se for outro gasto, toque em <b>Adicionar mesmo assim</b>.</span>`;
+    $("gBtn").textContent = "Adicionar mesmo assim";
+    dupOk = dupSig(doc);
+  }
+  ["gValor", "gData", "gCartao"].forEach((id) => $(id).addEventListener("input", checarDup));
+  $("gCartao").addEventListener("change", checarDup);
+
   // ---------- lançamento rápido ----------
   function ctxRapido() {
     const pessoas = [...new Map([...state.gastos, ...state.pagamentos].filter((x) => x.pessoa && x.pessoa.trim()).map((x) => [keyName(x.pessoa), x.pessoa.trim()])).values()];
@@ -1483,7 +1531,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (r.erro) { el.className = "hint err"; el.textContent = r.erro; return; }
     el.className = "hint ok"; el.innerHTML = `<b>Vai lançar:</b> ${esc(r.resumo)}. Toque em Lançar ou aperte Enter.`;
   }
-  $("rText").addEventListener("input", prevRapido);
+  $("rText").addEventListener("input", () => { rapDupOk = null; prevRapido(); });
   $("fRapido").onsubmit = async (e) => {
     e.preventDefault();
     const t = $("rText").value.trim(); if (!t) return;
@@ -1491,6 +1539,16 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (r.erro) { prevRapido(); return; }
     if (!store) { $("rPrev").className = "hint err"; $("rPrev").textContent = "Ainda carregando seus dados. Tente de novo em instantes."; return; }
     const doc = { ...r.doc, criado: Date.now() };
+    if (r.col === "gastos") {
+      const iguais = parecidos(doc);
+      if (iguais.length && rapDupOk !== t) {
+        rapDupOk = t;
+        $("rPrev").className = "hint err";
+        $("rPrev").innerHTML = `<b>Parece que já foi lançado:</b> ${iguais.slice(0, 3).map(descDup).join("; ")}. Se for outro gasto, toque em Lançar de novo.`;
+        return;
+      }
+    }
+    rapDupOk = null;
     try {
       const id = await store.add(r.col, doc);
       $("rText").value = ""; prevRapido();
@@ -1572,6 +1630,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       if (r && r.doc && r.doc.categoria) document.querySelectorAll('input[name="cat"]').forEach((x) => (x.checked = x.value === r.doc.categoria));
     }
     updFatura();
+    checarDup();
     const faltou = [!c.valor && "valor", !c.marca && "loja", !c.card && "cartão"].filter(Boolean);
     $("rPrev").className = faltou.length ? "hint err" : "hint ok";
     $("rPrev").textContent = faltou.length
