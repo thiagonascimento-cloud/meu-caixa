@@ -165,6 +165,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.bus-soma { display: grid; gap: 4px; padding: 10px 12px; margin-bottom: 4px; border-radius: 8px; background: var(--surface-2); font-size: 0.9rem; }
+.bus-soma b { font-family: var(--font-mono); font-weight: 600; }
 .ctiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .ctiles:empty { display: none; }
 .ctile { text-align: left; display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); border-left: 5px solid var(--cor, var(--line)); background: color-mix(in srgb, var(--cor, var(--line)) 10%, var(--surface)); color: var(--fg); cursor: pointer; min-width: 0; }
@@ -472,12 +474,17 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       <div class="col">
       <section class="panel" aria-label="Procurar">
         <div class="panel-head"><h2>Procurar</h2><span class="label" id="busCount"></span></div>
-        <input id="busca" type="search" autocomplete="off" placeholder="Loja, pessoa, cartão, data ou valor (ex.: 45,90)" aria-label="Procurar lançamentos">
+        <input id="busca" type="search" autocomplete="off" placeholder="Ex.: uber, 99  ·  mercado  ·  45,90  ·  05/10" aria-label="Procurar lançamentos">
         <div class="chips" id="busTipos" role="group" aria-label="Tipo">
           <button type="button" data-btipo="" aria-pressed="true">Tudo</button>
           <button type="button" data-btipo="gastos" aria-pressed="false">Gastos</button>
           <button type="button" data-btipo="proventos" aria-pressed="false">Proventos</button>
           <button type="button" data-btipo="pagamentos" aria-pressed="false">Pagamentos</button>
+        </div>
+        <div class="chips" id="busFiltros" role="group" aria-label="Período e dono">
+          <button type="button" data-bper="tudo" aria-pressed="true">Todos os meses</button>
+          <button type="button" data-bper="mes" aria-pressed="false" id="busMesBtn">Neste mês</button>
+          <button type="button" data-bmeus aria-pressed="false">Só os meus</button>
         </div>
         <div class="list" id="busRes"></div>
       </section>
@@ -624,7 +631,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   let visao = "pag";
   let oView = "mes", oPessoa = "";
   let kView = "mes", kCartao = "";
-  let bTipo = "";
+  let bTipo = "", bPeriodo = "tudo", bMeus = false;
 
   // ---------- armazenamento ----------
   let store = null;
@@ -1186,43 +1193,61 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   const fmtData = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
   const mesTxt = (i) => `${MON3[i % 12]}/${String(Math.floor(i / 12)).slice(2)}`;
   function renderBusca() {
+    $("busMesBtn").textContent = `Em ${MONTHS[cur % 12]}`;
     const q = $("busca").value.trim();
-    if (!q) { $("busRes").innerHTML = `<div class="empty">Digite uma loja, pessoa, cartão, categoria, data (ex.: 05/10) ou valor (ex.: 45,90). A busca olha todos os meses.</div>`; $("busCount").textContent = ""; return; }
-    const termos = semAcento(q).split(/\s+/).filter(Boolean);
+    if (!q) { $("busRes").innerHTML = `<div class="empty">Digite uma loja, pessoa, cartão, categoria, data (ex.: 05/10) ou valor (ex.: 45,90).<br>Para somar mais de um, separe por vírgula: <b>uber, 99</b>.</div>`; $("busCount").textContent = ""; return; }
+    // Vírgula (ou "ou") separa alternativas; dentro de cada alternativa, todas as palavras precisam aparecer.
+    const grupos = semAcento(q).split(/\s*(?:,|;|\bou\b)\s*/).map((g) => g.split(/\s+/).filter(Boolean)).filter((g) => g.length);
     const numero = (t) => (/^\d+([.,]\d{1,2})?$/.test(t) ? parseFloat(t.replace(",", ".")) : null);
-    const casa = (texto, valores) => termos.every((t) => {
+    // Termo só com número (ex.: "99") casa com o valor exato ou com uma palavra inteira do nome, nunca com centavos (R$ 10,99).
+    const casa = (texto, palavras, valores) => grupos.some((termos) => termos.every((t) => {
       const n = numero(t);
-      if (n !== null && valores.some((v) => Math.abs(v - n) < 0.005)) return true;
+      if (n !== null) return valores.some((v) => Math.abs(v - n) < 0.005) || palavras.includes(t);
       return texto.includes(t);
-    });
+    }));
+    const palavrasDe = (...xs) => semAcento(xs.filter(Boolean).join(" ")).split(/[^a-z0-9]+/).filter(Boolean);
+    const noMes = bPeriodo === "mes";
     const res = [];
     if (!bTipo || bTipo === "gastos") for (const g of state.gastos) {
+      if (bMeus && g.pessoa && g.pessoa.trim()) continue;
       const c = cardById(g.cartao), n = Math.max(1, g.parcelas | 0), s0 = startMonth(g);
+      let v = g.valor, label = n > 1 ? `${n}x de ${money(parcelaValor(g, 1))} · fatura ${mesTxt(s0)} a ${mesTxt(s0 + n - 1)}` : `à vista · fatura ${mesTxt(s0)}`;
+      if (noMes) {
+        const k = cur - (visao === "compra" ? monthIndex(g.data) : s0);
+        if (k < 0 || k >= n) continue;
+        v = parcelaValor(g, k);
+        label = n > 1 ? `parcela ${k + 1}/${n} de ${money(g.valor)}` : "à vista";
+      }
       const vals = [g.valor, parcelaValor(g, 0), parcelaValor(g, 1)];
       const texto = semAcento([g.marca, g.categoria, g.pessoa, c ? c.nome : "sem cartão", fmtData(g.data), MONTHS[monthIndex(g.data) % 12], MONTHS[s0 % 12], vals.map(money).join(" "), "gasto"].join(" "));
-      if (casa(texto, vals)) res.push({ col: "gastos", d: g, data: g.data, ir: s0, t: g.marca, v: -g.valor,
-        meta: `<span class="pill">Gasto</span><span><i class="dot" style="background:${catColor(g.categoria)}"></i>${esc(g.categoria || "Outros")}</span><span>${n > 1 ? `${n}x de ${money(parcelaValor(g, 1))} · fatura ${mesTxt(s0)} a ${mesTxt(s0 + n - 1)}` : `à vista · fatura ${mesTxt(s0)}`}</span>${cardPill(g)}${g.pessoa ? `<span class="pill owe">${esc(g.pessoa)}</span>` : ""}` });
+      if (casa(texto, palavrasDe(g.marca, g.categoria, g.pessoa, c && c.nome), vals)) res.push({ col: "gastos", d: g, data: g.data, ir: s0, t: g.marca, v: -v,
+        meta: `<span class="pill">Gasto</span><span><i class="dot" style="background:${catColor(g.categoria)}"></i>${esc(g.categoria || "Outros")}</span><span>${label}</span>${cardPill(g)}${g.pessoa ? `<span class="pill owe">${esc(g.pessoa)}</span>` : ""}` });
     }
     if (!bTipo || bTipo === "proventos") for (const p of state.proventos) {
+      if (noMes && (ehFixo(p) || provMesIdx(p) !== cur)) continue;
       const texto = semAcento([p.descricao, p.tipo, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "provento"].join(" "));
-      if (casa(texto, [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: provMesIdx(p), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento</span><span>${esc(p.tipo || "")}</span>` });
+      if (casa(texto, palavrasDe(p.descricao, p.tipo), [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: provMesIdx(p), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento${ehFixo(p) ? " fixo" : ""}</span><span>${esc(p.tipo || "")}</span>` });
     }
-    if (!bTipo || bTipo === "pagamentos") for (const p of state.pagamentos) {
+    if ((!bTipo || bTipo === "pagamentos") && !bMeus) for (const p of state.pagamentos) {
+      if (noMes && monthIndex(p.data) !== cur) continue;
       const texto = semAcento([p.pessoa, p.obs, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "pagamento recebido"].join(" "));
-      if (casa(texto, [p.valor])) res.push({ col: "pagamentos", d: p, data: p.data, ir: monthIndex(p.data), t: `${p.pessoa} te pagou`, v: p.valor, meta: `<span class="pill">Pagamento</span>${p.obs ? `<span>${esc(p.obs)}</span>` : ""}` });
+      if (casa(texto, palavrasDe(p.pessoa, p.obs), [p.valor])) res.push({ col: "pagamentos", d: p, data: p.data, ir: monthIndex(p.data), t: `${p.pessoa} te pagou`, v: p.valor, meta: `<span class="pill">Pagamento</span>${p.obs ? `<span>${esc(p.obs)}</span>` : ""}` });
     }
     res.sort((a, b) => b.data.localeCompare(a.data));
-    const LIM = 60, total = res.reduce((s, r) => s + r.v, 0);
+    const LIM = 60;
+    const gastos = -res.filter((r) => r.v < 0).reduce((s, r) => s + r.v, 0), entradas = res.filter((r) => r.v > 0).reduce((s, r) => s + r.v, 0);
+    const qtdG = res.filter((r) => r.v < 0).length;
     $("busCount").textContent = res.length ? `${res.length} ${res.length === 1 ? "resultado" : "resultados"}` : "";
+    const quando = noMes ? `em ${MONTHS[cur % 12]}` : "em todos os meses";
+    const somaTxt = res.length ? `<div class="bus-soma">${qtdG ? `<span>Gastos ${quando}${bMeus ? " (só os seus)" : ""}: <b>${money(gastos)}</b> · ${qtdG} ${qtdG === 1 ? "lançamento" : "lançamentos"}</span>` : ""}${entradas ? `<span>Entradas ${quando}: <b>${money(entradas)}</b></span>` : ""}</div>` : "";
     $("busRes").innerHTML = res.length === 0
-      ? `<div class="empty">Nada encontrado para "${esc(q)}".</div>`
-      : res.slice(0, LIM).map((r) => `<div class="item">${dateCell(r.data)}
+      ? `<div class="empty">Nada encontrado para "${esc(q)}" ${quando}.</div>`
+      : somaTxt + res.slice(0, LIM).map((r) => `<div class="item">${dateCell(r.data)}
           <div class="who"><div class="t">${esc(r.t)}</div><div class="meta">${r.meta}</div></div>
           <div class="amt"><span class="a ${r.v < 0 ? "out" : "in"}">${r.v < 0 ? "−" : "+"} ${money(Math.abs(r.v))}</span>
             <span class="acts"><button type="button" class="del" data-irmes="${r.ir}">ver no mês</button></span>${delBtn(r.col, r.d.id)}</div>
         </div>`).join("")
-        + (res.length > LIM ? `<p class="hint">Mostrando ${LIM} de ${res.length}. Digite mais detalhes para refinar.</p>` : "")
-        + (res.length > 1 ? `<p class="hint">Soma dos resultados: <b>${money(total)}</b></p>` : "");
+        + (res.length > LIM ? `<p class="hint">Mostrando ${LIM} de ${res.length}. A soma acima considera todos.</p>` : "");
   }
 
   // Depois que alguma fatura do mês é marcada como paga, mostra o que ainda falta pagar.
@@ -1327,6 +1352,13 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     const b = e.target.closest("[data-btipo]"); if (!b) return;
     bTipo = b.dataset.btipo;
     $("busTipos").querySelectorAll("[data-btipo]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderBusca();
+  });
+  $("busFiltros").addEventListener("click", (e) => {
+    const per = e.target.closest("[data-bper]"), meus = e.target.closest("[data-bmeus]");
+    if (per) { bPeriodo = per.dataset.bper; $("busFiltros").querySelectorAll("[data-bper]").forEach((x) => x.setAttribute("aria-pressed", String(x === per))); }
+    else if (meus) { bMeus = !bMeus; meus.setAttribute("aria-pressed", String(bMeus)); }
+    else return;
     renderBusca();
   });
   $("busRes").addEventListener("click", (e) => {
