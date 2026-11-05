@@ -869,6 +869,10 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     }
     return t;
   }
+  // Os gastos sem cartão (Pix, dinheiro, débito) também podem ser marcados como pagos no mês.
+  const SEM_ID = "sys-sem-cartao";
+  const semCartaoPago = (ym) => faturaPaga(state.semCartao, ym);
+  const itemPago = (g, ym) => { const c = cardById(g.cartao); return c ? faturaPaga(c, ym) : semCartaoPago(ym); };
   const faturaPaga = (c, ym) => !!(c && Array.isArray(c.pagos) && c.pagos.includes(ym));
   function cardPill(g) {
     if (!g.cartao) return "";
@@ -904,7 +908,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("sumIn").textContent = money(totIn);
     $("sumInS").textContent = (fixMes.length ? `fixos ${money(fixMes.reduce((s, f) => s + f.valor, 0))}` : "") + (provMes.length ? `${fixMes.length ? " + " : ""}${provMes.length} ${provMes.length === 1 ? "lançado" : "lançados"}` : fixMes.length ? "" : "nenhuma entrada");
     $("sumCard").textContent = money(totCard);
-    const aPagar = parc.filter((it) => !(cardById(it.g.cartao) && faturaPaga(cardById(it.g.cartao), ymOf(cur)))).reduce((s, it) => s + it.v, 0);
+    const aPagar = parc.filter((it) => !itemPago(it.g, ymOf(cur))).reduce((s, it) => s + it.v, 0);
     $("sumCardS").textContent = (aPagar < totCard - 0.004 ? `falta pagar ${money(aPagar)}` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`) + (totDeles > 0 ? ` · ${money(totDeles)} de outras pessoas` : "");
     const net = totIn - meu;
     $("sumNet").textContent = money(net);
@@ -929,7 +933,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     const byCard = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome))
       .map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", pago: faturaPaga(c, ymCur), v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
     const semCartao = parc.filter((it) => !cardById(it.g.cartao)).reduce((s, it) => s + it.v, 0);
-    if (semCartao > 0) byCard.push({ id: "", nome: "Sem cartão", cor: "var(--cat-outros)", sub: "Pix, dinheiro ou outro", pago: false, v: semCartao });
+    if (semCartao > 0) byCard.push({ id: "_sem", nome: "Sem cartão", cor: "var(--cat-outros)", sub: "Pix, dinheiro ou outro", pago: semCartaoPago(ymCur), v: semCartao });
     const maxCard = Math.max(...byCard.map((c) => c.v), 0);
     $("cardBars").innerHTML = state.cartoes.length === 0
       ? `<div class="empty">Cadastre seus cartões em Lançar → Cartões para ver a fatura de cada um.</div>`
@@ -937,7 +941,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <div class="fat-n"><span><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}
             <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div></div>
           <div class="fat-v"><span class="num">${money(c.v)}</span><small>${visao === "compra" ? (c.id ? `comprado em ${MONTHS[mo]}` : "") : c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? `a pagar ${money(c.v)}` : "sem fatura"}</small></div>
-          ${c.id && visao === "pag" ? `<label class="flag" title="Marcar a fatura de ${MONTHS[mo]} como paga"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
+          ${c.id && visao === "pag" ? `<label class="flag" title="${c.id === "_sem" ? `Marcar os gastos sem cartão de ${MONTHS[mo]} como pagos` : `Marcar a fatura de ${MONTHS[mo]} como paga`}"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
         </div>`).join("") + caixinhaAberto(byCard, mo);
 
     // devedores
@@ -1279,12 +1283,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
             .map((g) => { const n = Math.max(1, g.parcelas | 0); return { g, label: n > 1 ? `${n}x de ${money(parcelaValor(g, 1))}` : "à vista", v: g.valor, sub: "" }; });
       const tot = itens.reduce((s, i) => s + i.v, 0);
       const deles = itens.filter((i) => i.g.pessoa).reduce((s, i) => s + i.v, 0);
-      const paga = P.view === "mes" && visao === "pag" && o.card && faturaPaga(o.card, ymOf(cur));
+      const paga = P.view === "mes" && visao === "pag" && (o.id === "_sem" ? semCartaoPago(ymOf(cur)) : !!o.card && faturaPaga(o.card, ymOf(cur)));
       return { o, itens, tot, deles, paga };
     }).filter((gr) => gr.itens.length);
     if (P.sel !== "" && !grupos.some((gr) => gr.o.id === P.sel)) P.sel = "";
     const meus = P === PAINEIS.meus;
-    const status = (gr) => (!meus && P.view === "mes" && visao === "pag" && gr.o.card) ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar</b>`) : "";
+    const status = (gr) => (!meus && P.view === "mes" && visao === "pag" && (gr.o.card || gr.o.id === "_sem")) ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar</b>`) : "";
     $(P.chips).innerHTML = grupos.map((gr) => `<button type="button" class="ctile" style="--cor:${esc(gr.o.cor)}" data-${P.attr}="${esc(gr.o.id)}" aria-pressed="${gr.o.id === P.sel}">
         <span class="cn">${esc(gr.o.nome)}</span><span class="cv">${money(gr.tot)}</span>
         <small>${gr.itens.length} ${gr.itens.length === 1 ? "gasto" : "gastos"}${!meus && gr.deles > 0 ? ` · ${money(gr.deles)} de outros` : ""}${status(gr)}</small></button>`).join("");
@@ -1881,8 +1885,18 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
   document.addEventListener("change", async (e) => {
     const f = e.target.closest("[data-pagar]");
     if (!f || !store) return;
-    const c = cardById(f.dataset.pagar); if (!c) return;
     const ym = ymOf(cur);
+    if (f.dataset.pagar === "_sem") {
+      const c = state.semCartao;
+      const pagos = (c && Array.isArray(c.pagos) ? c.pagos : []).filter((x) => x !== ym);
+      if (f.checked) pagos.push(ym);
+      try {
+        if (c) { const { id, ...resto } = c; await store.update("cartoes", id, { ...resto, pagos: pagos.sort() }); }
+        else await store.add("cartoes", { id: SEM_ID, nome: "__sem_cartao__", sistema: true, cor: "#6b7a75", pagos: pagos.sort(), criado: Date.now() });
+      } catch (err) { f.checked = !f.checked; $("foot").textContent = "Não foi possível marcar como pago. Tente de novo."; }
+      return;
+    }
+    const c = cardById(f.dataset.pagar); if (!c) return;
     const pagos = (Array.isArray(c.pagos) ? c.pagos : []).filter((x) => x !== ym);
     if (f.checked) pagos.push(ym);
     const { id, ...resto } = c;
@@ -2012,9 +2026,11 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("localNotice").hidden = !local;
     for (const col of COLS) {
       s.watch(col, (docs) => {
-        state[col] = col === "cartoes"
-          ? docs.filter((d) => d && typeof d.nome === "string")
-          : docs.filter((d) => d && typeof d.data === "string" && typeof d.valor === "number");
+        if (col === "cartoes") {
+          const todos = docs.filter((d) => d && typeof d.nome === "string");
+          state.semCartao = todos.find((d) => d.id === SEM_ID) || null;
+          state.cartoes = todos.filter((d) => d.id !== SEM_ID);
+        } else state[col] = docs.filter((d) => d && typeof d.data === "string" && typeof d.valor === "number");
         render();
       });
     }
