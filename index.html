@@ -102,7 +102,7 @@ button { font: inherit; cursor: pointer; }
 .panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 
 /* abas do formulário */
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 8px; }
+.tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 8px; }
 .tabs button { border: 0; background: transparent; color: var(--muted); padding: 8px 2px; border-radius: 6px; font-weight: 600; font-size: 0.84rem; }
 .tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 .card-swatch { display: inline-block; width: 22px; height: 15px; border-radius: 3px; vertical-align: -3px; margin-right: 6px; }
@@ -165,6 +165,13 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .amt .sub { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 .del { border: 0; background: transparent; color: var(--muted); font-size: 0.75rem; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 .acts { display: inline-flex; gap: 12px; }
+.poup-saldo { display: grid; gap: 2px; padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); }
+.poup-saldo .big { font-family: var(--font-mono); font-size: 1.8rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+.poup-saldo small { color: var(--muted); }
+.poup-mes { font-size: 0.88rem; color: var(--muted); }
+.poup-mes b { color: var(--fg); font-family: var(--font-mono); font-weight: 500; }
+.fat-n .del { justify-self: start; }
+@media (max-width: 420px) { .abas button { font-size: 0.78rem; padding: 9px 2px; } }
 .bus-soma { display: grid; gap: 4px; padding: 10px 12px; margin-bottom: 4px; border-radius: 8px; background: var(--surface-2); font-size: 0.9rem; }
 .bus-soma b { font-family: var(--font-mono); font-weight: 600; }
 .ctiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -213,7 +220,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .dup strong { font-family: var(--font-display); }
 .dup ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 .dup .num { font-family: var(--font-mono); }
-.abas { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.abas { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 .abas button { border: 0; background: transparent; color: var(--muted); padding: 10px 4px; border-radius: 7px; font-weight: 600; font-size: 0.92rem; }
 .abas button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 .aba { display: grid; gap: 20px; }
@@ -368,6 +375,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     <button type="button" role="tab" data-aba="terceiros" aria-selected="false">Terceiros</button>
     <button type="button" role="tab" data-aba="cartoes" aria-selected="false">Cartões</button>
     <button type="button" role="tab" data-aba="meus" aria-selected="false">Meus gastos</button>
+    <button type="button" role="tab" data-aba="poupanca" aria-selected="false">Poupança</button>
   </nav>
 
   <div class="aba" data-pane-aba="lancar">
@@ -387,6 +395,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <button role="tab" id="tab-provento" aria-selected="false" data-tab="provento">Provento</button>
           <button role="tab" id="tab-pagamento" aria-selected="false" data-tab="pagamento">Me pagaram</button>
           <button role="tab" id="tab-cartoes" aria-selected="false" data-tab="cartoes">Cartões</button>
+          <button role="tab" id="tab-antecipar" aria-selected="false" data-tab="antecipar">Antecipar</button>
         </div>
 
         <form id="fGasto" data-pane="gasto" autocomplete="off">
@@ -467,6 +476,24 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <div class="formbtns"><button class="primary" type="submit" id="cBtn">Cadastrar cartão</button><button type="button" class="ghost" id="cCancel" hidden>Cancelar edição</button></div>
           <p class="toast" id="cToast" role="status"></p>
           <div class="cardlist" id="cardList"></div>
+        </form>
+
+        <form id="fAntecipa" data-pane="antecipar" hidden autocomplete="off">
+          <p class="hint">Registre um valor que você já pagou de uma fatura: antecipação ou pagamento parcial. Ele é descontado do que falta pagar naquela fatura.</p>
+          <div class="row2">
+            <label class="field"><span>Cartão</span><select id="aCartao"></select></label>
+            <label class="field"><span>Fatura de</span><select id="aMes"></select></label>
+          </div>
+          <label class="field"><span>Abater de um gasto (opcional)</span><select id="aGasto"></select></label>
+          <div class="row2">
+            <label class="field"><span>Valor pago (R$)</span><input id="aValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
+            <label class="field"><span>Pago em</span><input id="aData" type="date" required></label>
+          </div>
+          <label class="field"><span>Observação (opcional)</span><input id="aObs" placeholder="Ex.: antecipação pelo app do banco"></label>
+          <p class="hint" id="aHint"></p>
+          <div class="formbtns"><button class="primary" type="submit" id="aBtn">Registrar antecipação</button></div>
+          <p class="toast" id="aToast" role="status"></p>
+          <div id="aList"></div>
         </form>
         <datalist id="pessoasList"></datalist>
       </section>
@@ -588,6 +615,37 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       </div>
     </div>
   </div>
+  <div class="aba" data-pane-aba="poupanca" hidden>
+    <div class="grid g2">
+      <div class="col">
+      <section class="panel" aria-label="Poupança">
+        <div class="panel-head"><h2>Poupança</h2><span class="label">saldo atual</span></div>
+        <div class="poup-saldo" id="poupSaldo"></div>
+        <form id="fPoup" autocomplete="off">
+          <div class="chips" role="group" aria-label="Tipo de movimento">
+            <label><input type="radio" name="ptp" id="ptp-aporte" value="aporte" checked><span>Aplicação</span></label>
+            <label><input type="radio" name="ptp" id="ptp-resgate" value="resgate"><span>Resgate</span></label>
+          </div>
+          <div class="row2">
+            <label class="field"><span>Valor (R$)</span><input id="poValor" type="number" step="0.01" min="0.01" inputmode="decimal" required placeholder="0,00"></label>
+            <label class="field"><span>Data</span><input id="poData" type="date" required></label>
+          </div>
+          <label class="field"><span>Descrição (opcional)</span><input id="poDesc" maxlength="60" placeholder="Ex.: CDB, reserva de emergência"></label>
+          <div class="formbtns"><button class="primary" type="submit" id="poBtn">Registrar aplicação</button></div>
+          <p class="toast" id="poToast" role="status"></p>
+        </form>
+      </section>
+      </div>
+      <div class="col">
+      <section class="panel" aria-label="Movimentos da poupança">
+        <div class="panel-head"><h2>Movimentos</h2><span class="label" id="poupMesLbl"></span></div>
+        <div class="poup-mes" id="poupMes"></div>
+        <div class="list" id="poupList"></div>
+      </section>
+      </div>
+    </div>
+  </div>
+
   <p class="foot" id="foot">Carregando seus dados…</p>
 </div>
 <div class="undo" id="undo" role="status" hidden><span id="undoMsg">Lançamento excluído.</span><button type="button" id="undoBtn">Desfazer</button></div>
@@ -869,6 +927,29 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     }
     return t;
   }
+  // ---- movimentos guardados junto dos pagamentos (aba "pagamentos" da planilha, campo tipoMov) ----
+  // abate = antecipação/pagamento parcial de uma fatura · aporte/resgate = poupança
+  const ehMov = (p) => !!p && (p.tipoMov === "abate" || p.tipoMov === "aporte" || p.tipoMov === "resgate");
+  const pagamentosReais = () => state.pagamentos.filter((p) => !ehMov(p));
+  const abatimentos = () => state.pagamentos.filter((p) => p.tipoMov === "abate" && /^\d{4}-\d{2}$/.test(p.mesFatura || ""));
+  const abatidoNaFatura = (cartaoId, ym) => abatimentos().filter((a) => a.cartao === cartaoId && a.mesFatura === ym).reduce((t, a) => t + a.valor, 0);
+  const abatidoNoGasto = (gid, ym) => abatimentos().filter((a) => a.gasto === gid && a.mesFatura === ym).reduce((t, a) => t + a.valor, 0);
+  const poupMovs = () => state.pagamentos.filter((p) => p.tipoMov === "aporte" || p.tipoMov === "resgate").sort((a, b) => b.data.localeCompare(a.data) || (b.criado || 0) - (a.criado || 0));
+  const sinalPoup = (p) => (p.tipoMov === "aporte" ? p.valor : -p.valor);
+  // Efeito no caixa do mês m: a antecipação sai no mês em que foi paga e deixa de pesar no mês da fatura;
+  // aplicação na poupança sai do mês, resgate volta para ele.
+  function ajusteCaixa(m) {
+    let a = 0;
+    for (const ab of abatimentos()) {
+      const pm = monthIndex(ab.data), fm = monthIndex(ab.mesFatura);
+      if (pm === fm) continue;
+      if (pm === m) a += ab.valor;
+      if (fm === m) a -= ab.valor;
+    }
+    for (const p of poupMovs()) if (monthIndex(p.data) === m) a += sinalPoup(p);
+    return a;
+  }
+
   // Os gastos sem cartão (Pix, dinheiro, débito) também podem ser marcados como pagos no mês.
   const SEM_ID = "sys-sem-cartao";
   const semCartaoPago = (ym) => faturaPaga(state.semCartao, ym);
@@ -908,7 +989,11 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     $("sumIn").textContent = money(totIn);
     $("sumInS").textContent = (fixMes.length ? `fixos ${money(fixMes.reduce((s, f) => s + f.valor, 0))}` : "") + (provMes.length ? `${fixMes.length ? " + " : ""}${provMes.length} ${provMes.length === 1 ? "lançado" : "lançados"}` : fixMes.length ? "" : "nenhuma entrada");
     $("sumCard").textContent = money(totCard);
-    const aPagar = parc.filter((it) => !itemPago(it.g, ymOf(cur))).reduce((s, it) => s + it.v, 0);
+    let aPagar = parc.filter((it) => !itemPago(it.g, ymOf(cur))).reduce((s, it) => s + it.v, 0);
+    aPagar = Math.max(0, aPagar - [...state.cartoes.map((c) => c.id), "_sem"].reduce((t, id) => {
+      const pago = id === "_sem" ? semCartaoPago(ymOf(cur)) : faturaPaga(cardById(id), ymOf(cur));
+      return pago ? t : t + abatidoNaFatura(id, ymOf(cur));
+    }, 0));
     $("sumCardS").textContent = (aPagar < totCard - 0.004 ? `falta pagar ${money(aPagar)}` : `${parc.length} ${parc.length === 1 ? "lançamento" : "lançamentos"}`) + (totDeles > 0 ? ` · ${money(totDeles)} de outras pessoas` : "");
     const net = totIn - meu;
     $("sumNet").textContent = money(net);
@@ -931,16 +1016,16 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     // fatura por cartão
     const ymCur = ymOf(cur);
     const byCard = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome))
-      .map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", pago: faturaPaga(c, ymCur), v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
+      .map((c) => ({ id: c.id, nome: c.nome, cor: c.cor, sub: c.venc ? `vence dia ${c.venc}` : "", pago: faturaPaga(c, ymCur), ab: abatidoNaFatura(c.id, ymCur), v: parc.filter((it) => it.g.cartao === c.id).reduce((s, it) => s + it.v, 0) }));
     const semCartao = parc.filter((it) => !cardById(it.g.cartao)).reduce((s, it) => s + it.v, 0);
-    if (semCartao > 0) byCard.push({ id: "_sem", nome: "Sem cartão", cor: "var(--cat-outros)", sub: "Pix, dinheiro ou outro", pago: semCartaoPago(ymCur), v: semCartao });
+    if (semCartao > 0) byCard.push({ id: "_sem", nome: "Sem cartão", cor: "var(--cat-outros)", sub: "Pix, dinheiro ou outro", pago: semCartaoPago(ymCur), ab: abatidoNaFatura("_sem", ymCur), v: semCartao });
     const maxCard = Math.max(...byCard.map((c) => c.v), 0);
     $("cardBars").innerHTML = state.cartoes.length === 0
       ? `<div class="empty">Cadastre seus cartões em Lançar → Cartões para ver a fatura de cada um.</div>`
       : byCard.map((c) => `<div class="fat${c.pago ? " paga" : ""}">
-          <div class="fat-n"><span><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}
+          <div class="fat-n"><span><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</span>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}${visao === "pag" && c.id && !c.pago ? `<button type="button" class="del" data-antecipar="${esc(c.id)}">antecipar pagamento</button>` : ""}
             <div class="track"><div class="fill" style="width:${maxCard ? (c.v / maxCard * 100).toFixed(1) : 0}%;background:${esc(c.cor)}"></div></div></div>
-          <div class="fat-v"><span class="num">${money(c.v)}</span><small>${visao === "compra" ? (c.id ? `comprado em ${MONTHS[mo]}` : "") : c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? `a pagar ${money(c.v)}` : "sem fatura"}</small></div>
+          <div class="fat-v"><span class="num">${money(c.v)}</span><small>${visao === "compra" ? (c.id ? `comprado em ${MONTHS[mo]}` : "") : c.pago ? "fatura paga · a pagar R$ 0,00" : c.id ? (c.ab > 0 ? `antecipado ${money(c.ab)} · a pagar ${money(Math.max(0, c.v - c.ab))}` : `a pagar ${money(c.v)}`) : "sem fatura"}</small></div>
           ${c.id && visao === "pag" ? `<label class="flag" title="${c.id === "_sem" ? `Marcar os gastos sem cartão de ${MONTHS[mo]} como pagos` : `Marcar a fatura de ${MONTHS[mo]} como paga`}"><input type="checkbox" data-pagar="${esc(c.id)}"${c.pago ? " checked" : ""}> Paga</label>` : `<span></span>`}
         </div>`).join("") + caixinhaAberto(byCard, mo);
 
@@ -1017,6 +1102,8 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if ($("rText").value.trim()) prevRapido();
     renderFixos();
     renderEvolucao();
+    renderAntecipa();
+    renderPoupanca();
 
     // proventos
     const linhasFixos = fixMes.map((f) => `<div class="item"><div class="date"><b>fixo</b>${MON3[mo]}</div>
@@ -1029,7 +1116,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           <div class="amt"><span class="a in">+ ${money(p.valor)}</span>${delBtn("proventos", p.id)}</div></div>`).join("");
 
     // pagamentos
-    const pags = state.pagamentos.slice().sort((a, b) => b.data.localeCompare(a.data));
+    const pags = pagamentosReais().sort((a, b) => b.data.localeCompare(a.data));
     $("pagList").innerHTML = pags.length === 0
       ? `<div class="empty">Nenhum pagamento recebido ainda.</div>`
       : pags.map((p) => `<div class="item">${dateCell(p.data)}
@@ -1232,7 +1319,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       const texto = semAcento([p.descricao, p.tipo, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "provento"].join(" "));
       if (casa(texto, palavrasDe(p.descricao, p.tipo), [p.valor])) res.push({ col: "proventos", d: p, data: p.data, ir: provMesIdx(p), t: p.descricao, v: p.valor, meta: `<span class="pill">Provento${ehFixo(p) ? " fixo" : ""}</span><span>${esc(p.tipo || "")}</span>` });
     }
-    if ((!bTipo || bTipo === "pagamentos") && !bMeus) for (const p of state.pagamentos) {
+    if ((!bTipo || bTipo === "pagamentos") && !bMeus) for (const p of pagamentosReais()) {
       if (noMes && monthIndex(p.data) !== cur) continue;
       const texto = semAcento([p.pessoa, p.obs, fmtData(p.data), MONTHS[monthIndex(p.data) % 12], money(p.valor), "pagamento recebido"].join(" "));
       if (casa(texto, palavrasDe(p.pessoa, p.obs), [p.valor])) res.push({ col: "pagamentos", d: p, data: p.data, ir: monthIndex(p.data), t: `${p.pessoa} te pagou`, v: p.valor, meta: `<span class="pill">Pagamento</span>${p.obs ? `<span>${esc(p.obs)}</span>` : ""}` });
@@ -1259,7 +1346,7 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
     if (visao !== "pag") return `<p class="hint">Vendo por mês da compra. Para marcar faturas pagas, volte para "Mês do pagamento".</p>`;
     const comFatura = byCard.filter((c) => c.id && c.v > 0.004);
     if (!comFatura.some((c) => c.pago)) return "";
-    const abertos = comFatura.filter((c) => !c.pago);
+    const abertos = comFatura.filter((c) => !c.pago && c.v - (c.ab || 0) > 0.004).map((c) => ({ ...c, v: c.v - (c.ab || 0) }));
     if (!abertos.length) return `<div class="aberto ok"><strong>Tudo pago em ${MONTHS[mo]}</strong><span>Todas as faturas que vencem no mês estão marcadas como pagas.</span></div>`;
     const tot = abertos.reduce((s, c) => s + c.v, 0);
     return `<div class="aberto tem"><strong>Ficou em aberto em ${MONTHS[mo]}: <span class="num">${money(tot)}</span></strong>
@@ -1284,11 +1371,12 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       const tot = itens.reduce((s, i) => s + i.v, 0);
       const deles = itens.filter((i) => i.g.pessoa).reduce((s, i) => s + i.v, 0);
       const paga = P.view === "mes" && visao === "pag" && (o.id === "_sem" ? semCartaoPago(ymOf(cur)) : !!o.card && faturaPaga(o.card, ymOf(cur)));
-      return { o, itens, tot, deles, paga };
+      const ab = P.view === "mes" && visao === "pag" ? abatidoNaFatura(o.id, ymOf(cur)) : 0;
+      return { o, itens, tot, deles, paga, ab };
     }).filter((gr) => gr.itens.length);
     if (P.sel !== "" && !grupos.some((gr) => gr.o.id === P.sel)) P.sel = "";
     const meus = P === PAINEIS.meus;
-    const status = (gr) => (!meus && P.view === "mes" && visao === "pag" && (gr.o.card || gr.o.id === "_sem")) ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar</b>`) : "";
+    const status = (gr) => (!meus && P.view === "mes" && visao === "pag" && (gr.o.card || gr.o.id === "_sem")) ? (gr.paga ? ` · <b class="ok">paga</b>` : ` · <b>a pagar ${money(Math.max(0, gr.tot - gr.ab))}</b>${gr.ab > 0 ? ` · antecipado ${money(gr.ab)}` : ""}`) : "";
     $(P.chips).innerHTML = grupos.map((gr) => `<button type="button" class="ctile" style="--cor:${esc(gr.o.cor)}" data-${P.attr}="${esc(gr.o.id)}" aria-pressed="${gr.o.id === P.sel}">
         <span class="cn">${esc(gr.o.nome)}</span><span class="cv">${money(gr.tot)}</span>
         <small>${gr.itens.length} ${gr.itens.length === 1 ? "gasto" : "gastos"}${!meus && gr.deles > 0 ? ` · ${money(gr.deles)} de outros` : ""}${status(gr)}</small></button>`).join("");
@@ -1302,11 +1390,11 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
           ? `<p class="hint">Total: <b>${money(grupos.reduce((s, gr) => s + gr.tot, 0))}</b>. Toque num cartão para ver o demonstrativo.</p>`
           : `<div class="cdet ogroup">
           <div class="ohead"><span class="n"><i class="dot" style="background:${esc(sel.o.cor)}"></i>Demonstrativo · ${esc(sel.o.nome)}</span>
-            <span class="r">${rotulo} ${money(sel.tot)} · ${sel.itens.length} ${sel.itens.length === 1 ? "gasto" : "gastos"}${!meus && sel.deles > 0 ? ` · ${money(sel.deles)} de outras pessoas` : ""}${status(sel).replace("a pagar", `a pagar ${money(sel.tot)}`)} · <button type="button" class="del" data-fechar="${P.attr}">fechar</button></span></div>
+            <span class="r">${rotulo} ${money(sel.tot)} · ${sel.itens.length} ${sel.itens.length === 1 ? "gasto" : "gastos"}${!meus && sel.deles > 0 ? ` · ${money(sel.deles)} de outras pessoas` : ""}${status(sel)} · <button type="button" class="del" data-fechar="${P.attr}">fechar</button></span></div>
           <div class="list">${sel.itens.map((r) => `<div class="item">${dateCell(r.g.data)}
               <div class="who"><div class="t">${esc(r.g.marca)}</div>
                 <div class="meta"><span><i class="dot" style="background:${catColor(r.g.categoria)}"></i>${esc(r.g.categoria || "Outros")}</span><span>${r.label}</span>${r.g.pessoa ? `<span class="pill owe">${esc(r.g.pessoa)}</span>` : ""}</div></div>
-              <div class="amt"><span class="a out">− ${money(r.v)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ""}${delBtn("gastos", r.g.id)}</div>
+              <div class="amt"><span class="a out">− ${money(r.v)}</span>${r.sub ? `<span class="sub">${r.sub}</span>` : ""}${P.view === "mes" && abatidoNoGasto(r.g.id, ymOf(cur)) > 0 ? `<span class="sub">abatido ${money(abatidoNoGasto(r.g.id, ymOf(cur)))}</span>` : ""}${delBtn("gastos", r.g.id)}</div>
             </div>`).join("")}</div>
         </div>`;
   }
@@ -1683,19 +1771,110 @@ form.editing { box-shadow: 0 0 0 2px var(--owe); border-radius: 6px; padding: 8p
       <line class="grid-l" x1="0" x2="${W}" y1="${base}" y2="${base}"></line>${bars}</svg>`;
     // Orçamento: o quanto dá para gastar no mês com base só nos proventos fixos.
     const fixoDe = (m) => fixosDoMes(m).reduce((s, f) => s + f.valor, 0);
-    const lim = fixoDe(cur), g = meusGastosDoMes(cur), resta = lim - g;
+    const aj = ajusteCaixa(cur), poupM = poupMovs().filter((x) => monthIndex(x.data) === cur).reduce((t, x) => t + sinalPoup(x), 0);
+    const lim = fixoDe(cur), g = Math.max(0, meusGastosDoMes(cur) + aj), resta = lim - g;
+    const antecM = aj - poupM;
+    const notaAj = (poupM || Math.abs(antecM) > 0.004) ? `<p class="hint">Já inclui ${[poupM > 0 ? `${money(poupM)} aplicados na poupança` : poupM < 0 ? `${money(-poupM)} resgatados da poupança (voltaram para o mês)` : "", antecM > 0.004 ? `${money(antecM)} de antecipação de faturas futuras` : antecM < -0.004 ? `${money(-antecM)} já antecipados antes` : ""].filter(Boolean).join(" e ")}.</p>` : "";
     const pct = lim > 0 ? Math.min(100, Math.round(g / lim * 100)) : 0;
-    const prox = mHoje + 1, limP = fixoDe(prox), restaP = limP - meusGastosDoMes(prox);
+    const prox = mHoje + 1, limP = fixoDe(prox), restaP = limP - Math.max(0, meusGastosDoMes(prox) + ajusteCaixa(prox));
     $("evolResumo").innerHTML = !lim
       ? `<span>Cadastre seus proventos fixos (aba Meus gastos) para ver quanto ainda pode gastar por mês.</span>`
       : `<div class="orc">
           <div class="orc-n"><span>${MONTHS[cur % 12]} · provento fixo <b>${money(lim)}</b></span><span>já comprometido <b>${money(g)}</b> (${pct}%)</span></div>
           <div class="orc-bar"><div class="orc-fill${resta < 0 ? " estourou" : pct >= 80 ? " alerta" : ""}" style="width:${pct}%"></div></div>
           <div class="orc-n"><span>${resta >= 0 ? "ainda pode gastar" : "passou do provento fixo em"}</span><span class="big ${resta >= 0 ? "in" : "out"}">${money(Math.abs(resta))}</span></div>
+          ${notaAj}
           ${limP > 0 && prox !== cur ? `<p class="hint">Comprando hoje no cartão, o valor cai em <b>${MONTHS[prox % 12]}</b>: lá ${restaP >= 0 ? `ainda dá para gastar <b>${money(restaP)}</b>` : `já passou <b>${money(-restaP)}</b> do provento fixo`}.</p>` : ""}
         </div>`;
   }
   $("evolChart").addEventListener("click", (e) => { const r = e.target.closest("[data-evmes]"); if (r) { cur = +r.dataset.evmes; render(); } });
+
+  // ---------- antecipar / abater fatura ----------
+  const nomeCartao = (id) => (id === "_sem" ? "Sem cartão" : (cardById(id) || {}).nome || "cartão removido");
+  function renderAntecipa() {
+    const selC = $("aCartao"), selM = $("aMes"), selG = $("aGasto");
+    const pc = selC.value, pm = selM.value, pg = selG.value;
+    selC.innerHTML = state.cartoes.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join("") + `<option value="_sem">Sem cartão</option>`;
+    selC.value = [...selC.options].some((o) => o.value === pc) ? pc : (selC.options[0] || {}).value || "_sem";
+    const mHoje = monthIndex(todayISO());
+    const meses = []; for (let m = mHoje - 2; m <= mHoje + 12; m++) meses.push(m);
+    selM.innerHTML = meses.map((m) => `<option value="${ymOf(m)}">${MONTHS[m % 12]} ${Math.floor(m / 12)}${m === mHoje ? " (este mês)" : m === mHoje + 1 ? " (próximo)" : ""}</option>`).join("");
+    selM.value = meses.some((m) => ymOf(m) === pm) ? pm : ymOf(mHoje + 1);
+    const fm = monthIndex(selM.value), cid = selC.value;
+    const doCartao = (g) => (cid === "_sem" ? !cardById(g.cartao) : g.cartao === cid);
+    const itens = parcelasNoMesPag(fm).filter((it) => doCartao(it.g));
+    selG.innerHTML = `<option value="">Nenhum: abater da fatura toda</option>` + itens.map((it) => `<option value="${esc(it.g.id)}">${esc(it.g.marca)} · ${it.n > 1 ? `parcela ${it.k + 1}/${it.n}` : "à vista"} · ${money(it.v)}${it.g.pessoa ? ` · de ${esc(it.g.pessoa)}` : ""}</option>`).join("");
+    selG.value = [...selG.options].some((o) => o.value === pg) ? pg : "";
+    if (!$("aData").value) $("aData").value = todayISO();
+    const fatura = itens.reduce((t, it) => t + it.v, 0), ja = abatidoNaFatura(cid, selM.value);
+    $("aHint").innerHTML = `Fatura de <b>${MONTHS[fm % 12]}</b> · ${esc(nomeCartao(cid))}: ${money(fatura)} · já antecipado ${money(ja)} · <b>a pagar ${money(Math.max(0, fatura - ja))}</b>`;
+    const lista = abatimentos().slice().sort((a, b) => b.data.localeCompare(a.data)).slice(0, 15);
+    $("aList").innerHTML = !lista.length ? "" : `<span class="label">Antecipações registradas</span><div class="list">` + lista.map((a) => {
+      const g = a.gasto ? state.gastos.find((x) => x.id === a.gasto) : null;
+      return `<div class="item">${dateCell(a.data)}
+        <div class="who"><div class="t">${esc(nomeCartao(a.cartao))} · fatura de ${MONTHS[monthIndex(a.mesFatura) % 12]}</div><div class="meta">${g ? `<span>abatido de ${esc(g.marca)}</span>` : ""}${a.obs ? `<span>${esc(a.obs)}</span>` : ""}</div></div>
+        <div class="amt"><span class="a in">${money(a.valor)}</span><button type="button" class="del" data-del="pagamentos" data-id="${esc(a.id)}">excluir</button></div></div>`;
+    }).join("") + `</div>`;
+  }
+  // Parcelas que vencem no mês m (sempre pelo mês do pagamento, independente da visão escolhida).
+  function parcelasNoMesPag(m) {
+    const out = [];
+    for (const g of state.gastos) { const n = Math.max(1, g.parcelas | 0), k = m - startMonth(g); if (k >= 0 && k < n) out.push({ g, k, n, v: parcelaValor(g, k) }); }
+    return out.sort((a, b) => b.g.data.localeCompare(a.g.data));
+  }
+  ["aCartao", "aMes"].forEach((id) => $(id).addEventListener("change", () => { $("aGasto").value = ""; renderAntecipa(); }));
+  $("fAntecipa").onsubmit = async (e) => {
+    e.preventDefault();
+    const valor = Math.round(parseFloat($("aValor").value) * 100) / 100;
+    if (!(valor > 0) || !$("aData").value) { toast("aToast", "Informe o valor e a data do pagamento.", true); return; }
+    if (!store) { toast("aToast", "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
+    const doc = { pessoa: "", data: $("aData").value, valor, obs: $("aObs").value.trim(), criado: Date.now(), tipoMov: "abate", cartao: $("aCartao").value, mesFatura: $("aMes").value, gasto: $("aGasto").value };
+    try {
+      await store.add("pagamentos", doc);
+      $("aValor").value = ""; $("aObs").value = ""; $("aGasto").value = "";
+      toast("aToast", `Antecipação de ${money(valor)} registrada na fatura de ${MONTHS[monthIndex(doc.mesFatura) % 12]}.`);
+      render();
+    } catch (err) { toast("aToast", "Não foi possível salvar. Verifique a conexão e tente de novo.", true); }
+  };
+  // Atalho "antecipar pagamento" na fatura por cartão
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-antecipar]"); if (!b) return;
+    mostrarAba("lancar"); showTab("antecipar");
+    $("aCartao").value = b.dataset.antecipar; renderAntecipa();
+    $("aMes").value = ymOf(cur); $("aGasto").value = ""; renderAntecipa();
+    $("fAntecipa").scrollIntoView({ block: "start", behavior: "smooth" }); $("aValor").focus();
+  });
+
+  // ---------- poupança ----------
+  function renderPoupanca() {
+    const movs = poupMovs();
+    const saldo = movs.reduce((t, p) => t + sinalPoup(p), 0);
+    const doMes = movs.filter((p) => monthIndex(p.data) === cur);
+    const ap = doMes.filter((p) => p.tipoMov === "aporte").reduce((t, p) => t + p.valor, 0), rs = doMes.filter((p) => p.tipoMov === "resgate").reduce((t, p) => t + p.valor, 0);
+    $("poupSaldo").innerHTML = `<small>Saldo guardado</small><span class="big">${money(saldo)}</span><small>${movs.length ? `${movs.length} ${movs.length === 1 ? "movimento" : "movimentos"}` : "Registre a primeira aplicação abaixo."}</small>`;
+    $("poupMesLbl").textContent = `${MONTHS[cur % 12]} ${Math.floor(cur / 12)}`;
+    $("poupMes").innerHTML = `Em ${MONTHS[cur % 12]}: aplicou <b>${money(ap)}</b> · resgatou <b>${money(rs)}</b>`;
+    $("poupList").innerHTML = !movs.length ? `<div class="empty">Nenhum movimento ainda. Cada aplicação aumenta o saldo; cada resgate diminui.</div>`
+      : movs.map((p) => `<div class="item">${dateCell(p.data)}
+          <div class="who"><div class="t">${p.tipoMov === "aporte" ? "Aplicação" : "Resgate"}</div><div class="meta">${p.obs ? `<span>${esc(p.obs)}</span>` : ""}</div></div>
+          <div class="amt"><span class="a ${p.tipoMov === "aporte" ? "in" : "out"}">${p.tipoMov === "aporte" ? "+" : "−"} ${money(p.valor)}</span><button type="button" class="del" data-del="pagamentos" data-id="${esc(p.id)}">excluir</button></div></div>`).join("");
+  }
+  document.querySelectorAll('input[name="ptp"]').forEach((r) => r.addEventListener("change", () => { $("poBtn").textContent = r.value === "aporte" && r.checked ? "Registrar aplicação" : "Registrar resgate"; }));
+  $("fPoup").onsubmit = async (e) => {
+    e.preventDefault();
+    const tipo = document.querySelector('input[name="ptp"]:checked').value;
+    const valor = Math.round(parseFloat($("poValor").value) * 100) / 100;
+    if (!(valor > 0) || !$("poData").value) { toast("poToast", "Informe o valor e a data.", true); return; }
+    if (!store) { toast("poToast", "Ainda carregando seus dados. Tente de novo em instantes.", true); return; }
+    const saldo = poupMovs().reduce((t, p) => t + sinalPoup(p), 0);
+    try {
+      await store.add("pagamentos", { pessoa: "", data: $("poData").value, valor, obs: $("poDesc").value.trim(), criado: Date.now(), tipoMov: tipo });
+      $("poValor").value = ""; $("poDesc").value = "";
+      toast("poToast", tipo === "aporte" ? `Aplicação de ${money(valor)} registrada.` : (valor > saldo + 0.004 ? `Resgate registrado. Atenção: ficou maior que o saldo que estava guardado.` : `Resgate de ${money(valor)} registrado.`), tipo === "resgate" && valor > saldo + 0.004);
+      render();
+    } catch (err) { toast("poToast", "Não foi possível salvar. Verifique a conexão e tente de novo.", true); }
+  };
+  $("poData").value = todayISO();
 
   // ---------- lançamento repetido ----------
   // Parecido = mesmo valor (total ou de uma parcela), data até 3 dias de diferença e mesmo cartão (quando os dois têm cartão).
