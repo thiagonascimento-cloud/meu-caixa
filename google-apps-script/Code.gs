@@ -210,10 +210,30 @@ function lerTelegram() {
 }
 
 const AJUDA = "Mande o lançamento do jeito que falaria:\n" +
-  "• uber 25,90 nubank\n• renner 300 3x inter p/ ana\n• mercado 120 ontem\n• recebi 2918,23 salario\n• ana pagou 50\n\n" +
-  "Comandos:\n/desfazer – apaga o último lançamento feito por aqui\n/resumo – resumo do mês atual\n/ajuda – esta mensagem";
+  "• uber 25,90 nubank\n• renner 300 3x inter p/ ana\n• mercado 120 ontem\n• recebi 2918,23 salario\n• ana pagou 50\n" +
+  "• antecipei 50 nubank (ou: antecipei 50 nubank dezembro)\n• apliquei 200 reserva\n• resgatei 100\n\n" +
+  "Comandos:\n/desfazer – apaga o último lançamento feito por aqui\n/resumo – resumo do mês atual\n/poupanca – saldo da poupança\n/ajuda – esta mensagem";
+
+const MESES_TG = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const SEM_CARTAO_ID = "sys-sem-cartao";
 
 function hojeISO() { return Utilities.formatDate(new Date(), SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "yyyy-MM-dd"); }
+function fmtBR(v) { return "R$ " + (Math.round(v * 100) / 100).toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+function idxMes(s) { return +s.slice(0, 4) * 12 + (+s.slice(5, 7) - 1); }
+function ymDe(i) { return Math.floor(i / 12) + "-" + String(i % 12 + 1).padStart(2, "0"); }
+function semAcentoTG(s) { return String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim(); }
+function saldoPoupanca(pagamentos, ateYm) {
+  return pagamentos.filter(function (p) { return (p.tipoMov === "aporte" || p.tipoMov === "resgate") && (!ateYm || p.data.slice(0, 7) <= ateYm); })
+    .reduce(function (s, p) { return s + (p.tipoMov === "aporte" ? p.valor : -p.valor); }, 0);
+}
+
+function lancarDoRobo(chat, col, doc, resumo) {
+  doc.id = "tg-" + Utilities.getUuid().slice(0, 13);
+  doc.criado = Date.now();
+  aplicar([{ col: col, op: "set", doc: doc }]);
+  PropertiesService.getScriptProperties().setProperty("TG_ULTIMO", JSON.stringify({ col: col, id: doc.id, resumo: resumo }));
+  responder(chat, "Lançado: " + resumo + "\nSe ficou errado, mande /desfazer.");
+}
 
 function tratarMensagem(chat, texto) {
   const props = PropertiesService.getScriptProperties();
@@ -227,21 +247,57 @@ function tratarMensagem(chat, texto) {
   }
   if (/^\/resumo/i.test(texto)) return responder(chat, resumoDoMes(hojeISO().slice(0, 7)));
   const dados = lerTudo();
+  if (/^\/poupan/i.test(texto)) {
+    const ym = hojeISO().slice(0, 7);
+    const doMes = dados.pagamentos.filter(function (p) { return (p.tipoMov === "aporte" || p.tipoMov === "resgate") && p.data.slice(0, 7) === ym; });
+    const ap = doMes.filter(function (p) { return p.tipoMov === "aporte"; }).reduce(function (s, p) { return s + p.valor; }, 0);
+    const rs = doMes.filter(function (p) { return p.tipoMov === "resgate"; }).reduce(function (s, p) { return s + p.valor; }, 0);
+    return responder(chat, "Poupança: saldo " + fmtBR(saldoPoupanca(dados.pagamentos)) + "\nEm " + MESES_TG[idxMes(ym) % 12] + ": aplicou " + fmtBR(ap) + " · resgatou " + fmtBR(rs));
+  }
   const nomes = {};
   dados.gastos.concat(dados.pagamentos).forEach(function (x) { if (x.pessoa && x.pessoa.trim()) nomes[x.pessoa.trim().toLowerCase()] = x.pessoa.trim(); });
-  const r = interpretarLancamento(texto, {
-    cartoes: dados.cartoes.map(function (c) { return { id: c.id, nome: c.nome, prox: c.venceProxMes !== false }; }),
+  const cartoes = dados.cartoes.filter(function (c) { return c.id !== SEM_CARTAO_ID; });
+  const ctx = {
+    cartoes: cartoes.map(function (c) { return { id: c.id, nome: c.nome, prox: c.venceProxMes !== false }; }),
     pessoas: Object.keys(nomes).map(function (k) { return nomes[k]; }),
     hoje: hojeISO(),
-  });
+  };
+
+  // Poupança: "apliquei 200 reserva", "guardei 100", "resgatei 50"
+  const mPoup = /^(apliquei|guardei|investi|resgatei|saquei|retirei)\b\s*/i.exec(texto);
+  if (mPoup) {
+    const tipo = /^(resgatei|saquei|retirei)$/i.test(mPoup[1]) ? "resgate" : "aporte";
+    const r = interpretarLancamento(texto.slice(mPoup[0].length) || "x", ctx);
+    if (!r || r.erro || !(r.doc.valor > 0)) return responder(chat, "Não achei o valor. Exemplo: apliquei 200 reserva");
+    const desc = r.col === "gastos" && r.doc.marca !== "Gasto" ? r.doc.marca.replace(/^(na|no|em)\s+/i, "") : "";
+    const doc = { pessoa: "", data: r.doc.data, valor: r.doc.valor, obs: desc, tipoMov: tipo };
+    return lancarDoRobo(chat, "pagamentos", doc, (tipo === "aporte" ? "Aplicação na poupança: " : "Resgate da poupança: ") + fmtBR(doc.valor) + (desc ? " · " + desc : ""));
+  }
+
+  // Antecipação de fatura: "antecipei 50 nubank", "antecipei 50 nubank dezembro"
+  const mAnt = /^(antecipei|adiantei|abati)\b\s*/i.exec(texto);
+  if (mAnt) {
+    const resto = texto.slice(mAnt[0].length);
+    const r = interpretarLancamento(resto || "x", ctx);
+    if (!r || r.erro || !(r.doc.valor > 0)) return responder(chat, "Não achei o valor. Exemplo: antecipei 50 nubank");
+    const sa = semAcentoTG(resto);
+    const semCartao = /sem cart|pix|dinheiro/.test(sa);
+    const cartaoId = semCartao ? "_sem" : r.doc.cartao;
+    if (!cartaoId) return responder(chat, "Diga de qual cartão é a fatura. Exemplo: antecipei 50 nubank");
+    const cartao = cartoes.filter(function (c) { return c.id === cartaoId; })[0];
+    const hoje = idxMes(hojeISO());
+    let alvo = cartaoId !== "_sem" && cartao && cartao.venceProxMes !== false ? hoje + 1 : hoje;
+    MESES_TG.forEach(function (nomeMes, i) {
+      if (new RegExp("\\b" + semAcentoTG(nomeMes) + "\\b").test(sa)) { alvo = Math.floor(hoje / 12) * 12 + i; if (alvo < hoje) alvo += 12; }
+    });
+    const doc = { pessoa: "", data: r.doc.data, valor: r.doc.valor, obs: "via Telegram", tipoMov: "abate", cartao: cartaoId, mesFatura: ymDe(alvo), gasto: "" };
+    return lancarDoRobo(chat, "pagamentos", doc, "Antecipação de " + fmtBR(doc.valor) + " na fatura de " + MESES_TG[alvo % 12] + " · " + (cartaoId === "_sem" ? "sem cartão" : cartao.nome));
+  }
+
+  const r = interpretarLancamento(texto, ctx);
   if (!r) return;
   if (r.erro) return responder(chat, r.erro);
-  const doc = r.doc;
-  doc.id = "tg-" + Utilities.getUuid().slice(0, 13);
-  doc.criado = Date.now();
-  aplicar([{ col: r.col, op: "set", doc: doc }]);
-  props.setProperty("TG_ULTIMO", JSON.stringify({ col: r.col, id: doc.id, resumo: r.resumo }));
-  responder(chat, "Lançado: " + r.resumo + "\nSe ficou errado, mande /desfazer.");
+  lancarDoRobo(chat, r.col, r.doc, r.resumo);
 }
 
 /** Dia 1º de cada mês, às 8h: manda o resumo das faturas do mês. */
@@ -251,13 +307,16 @@ function enviarResumoMensal() {
 }
 
 function resumoDoMes(ym) {
-  const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-  const fmt = function (v) { return "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, "."); };
-  const mi = function (s) { return +s.slice(0, 4) * 12 + (+s.slice(5, 7) - 1); };
+  const fmt = fmtBR, mi = idxMes;
   const m = mi(ym);
   const d = lerTudo();
   const cartoes = {};
   d.cartoes.forEach(function (c) { cartoes[c.id] = c; });
+  const pagoNoMes = function (c) { return !!(c && Array.isArray(c.pagos) && c.pagos.indexOf(ym) >= 0); };
+  const movs = d.pagamentos.filter(function (p) { return p.tipoMov === "abate" || p.tipoMov === "aporte" || p.tipoMov === "resgate"; });
+  const abatidoPor = {};
+  movs.forEach(function (a) { if (a.tipoMov === "abate" && a.mesFatura === ym) abatidoPor[a.cartao] = (abatidoPor[a.cartao] || 0) + a.valor; });
+
   const porCartao = {}, porPessoa = {};
   let meu = 0, outros = 0;
   d.gastos.forEach(function (g) {
@@ -267,9 +326,9 @@ function resumoDoMes(ym) {
     if (k < 0 || k >= n) return;
     const tot = Math.round(g.valor * 100), base = Math.floor(tot / n);
     const v = (k === 0 ? tot - base * (n - 1) : base) / 100;
-    const c = cartoes[g.cartao];
-    const nome = c ? c.nome : "Sem cartão";
-    const pc = porCartao[nome] = porCartao[nome] || { meu: 0, outros: 0, paga: !!(c && Array.isArray(c.pagos) && c.pagos.indexOf(ym) >= 0) };
+    const c = cartoes[g.cartao] && g.cartao !== SEM_CARTAO_ID ? cartoes[g.cartao] : null;
+    const id = c ? c.id : "_sem";
+    const pc = porCartao[id] = porCartao[id] || { nome: c ? c.nome : "Sem cartão", meu: 0, outros: 0, paga: c ? pagoNoMes(c) : pagoNoMes(cartoes[SEM_CARTAO_ID]), ab: abatidoPor[id] || 0 };
     if (g.pessoa && g.pessoa.trim()) {
       pc.outros += v; outros += v;
       const p = g.pessoa.trim(), kp = p.toLowerCase();
@@ -278,23 +337,53 @@ function resumoDoMes(ym) {
     } else { pc.meu += v; meu += v; }
   });
   d.pagamentos.forEach(function (p) {
-    if (!p.pessoa || p.data.slice(0, 7) !== ym) return;
+    if (!p.pessoa || p.tipoMov || p.data.slice(0, 7) !== ym) return;
     const kp = p.pessoa.trim().toLowerCase();
     if (porPessoa[kp]) porPessoa[kp].pago += p.valor;
   });
-  // Provento conta no mês em que entra no caixa (campo "mes"); sem ele, no mês da data.
-  const entrou = d.proventos.filter(function (p) { return (/^\d{4}-\d{2}$/.test(p.mes) ? p.mes : p.data.slice(0, 7)) === ym; }).reduce(function (s, p) { return s + p.valor; }, 0);
-  const linhas = ["Meu Caixa – " + MESES[m % 12] + " de " + Math.floor(m / 12), "O que você paga e recebe neste mês.", ""];
+
+  // Proventos: os lançados no mês + os fixos (um lançado com o mesmo nome vale no lugar do fixo).
+  const mesP = function (p) { return /^\d{4}-\d{2}$/.test(p.mes) ? p.mes : p.data.slice(0, 7); };
+  const lancados = d.proventos.filter(function (p) { return p.fixo !== true && mesP(p) === ym; });
+  const fixos = d.proventos.filter(function (f) {
+    if (f.fixo !== true || (f.desde && f.desde > ym)) return false;
+    const n = semAcentoTG(f.descricao);
+    return !lancados.some(function (l) { const a = semAcentoTG(l.descricao); return a === n || a.indexOf(n) >= 0; });
+  });
+  const somaL = lancados.reduce(function (s, p) { return s + p.valor; }, 0), somaF = fixos.reduce(function (s, p) { return s + p.valor; }, 0);
+  const entrou = somaL + somaF;
+
+  // Caixa do mês: antecipação sai no mês em que foi paga; aplicação na poupança sai, resgate volta.
+  let ajuste = 0, aplicou = 0, resgatou = 0;
+  movs.forEach(function (p) {
+    if (p.tipoMov === "abate") {
+      if (!/^\d{4}-\d{2}$/.test(p.mesFatura || "")) return;
+      const pm = p.data.slice(0, 7);
+      if (pm === p.mesFatura) return;
+      if (pm === ym) ajuste += p.valor;
+      if (p.mesFatura === ym) ajuste -= p.valor;
+    } else if (p.data.slice(0, 7) === ym) {
+      if (p.tipoMov === "aporte") { ajuste += p.valor; aplicou += p.valor; } else { ajuste -= p.valor; resgatou += p.valor; }
+    }
+  });
+
+  const ids = Object.keys(porCartao).sort(function (a, b) { return porCartao[a].nome.localeCompare(porCartao[b].nome); });
+  let faltaPagar = 0, antecipado = 0;
+  ids.forEach(function (id) { const pc = porCartao[id]; antecipado += pc.ab; if (!pc.paga) faltaPagar += Math.max(0, pc.meu + pc.outros - pc.ab); });
+
+  const linhas = ["Meu Caixa – " + MESES_TG[m % 12] + " de " + Math.floor(m / 12), "O que você paga e recebe neste mês.", ""];
   linhas.push("Seus gastos que vencem no mês: " + fmt(meu));
   linhas.push("De outras pessoas: " + fmt(outros));
   linhas.push("Total das faturas do mês: " + fmt(meu + outros));
+  if (antecipado > 0.004) linhas.push("Já antecipado: " + fmt(antecipado));
+  linhas.push("Falta pagar: " + fmt(faltaPagar));
   linhas.push("");
   linhas.push("Por cartão:");
-  const nomesC = Object.keys(porCartao).sort();
-  if (!nomesC.length) linhas.push("• nenhum gasto neste mês");
-  nomesC.forEach(function (n) {
-    const pc = porCartao[n];
-    linhas.push("• " + n + ": " + fmt(pc.meu + pc.outros) + " (seu " + fmt(pc.meu) + (pc.outros ? " · outros " + fmt(pc.outros) : "") + ")" + (pc.paga ? " – paga" : ""));
+  if (!ids.length) linhas.push("• nenhum gasto neste mês");
+  ids.forEach(function (id) {
+    const pc = porCartao[id], tot = pc.meu + pc.outros;
+    const situacao = pc.paga ? " – paga" : pc.ab > 0.004 ? " – antecipado " + fmt(pc.ab) + " · falta " + fmt(Math.max(0, tot - pc.ab)) : " – a pagar";
+    linhas.push("• " + pc.nome + ": " + fmt(tot) + " (seu " + fmt(pc.meu) + (pc.outros ? " · outros " + fmt(pc.outros) : "") + ")" + situacao);
   });
   const pessoas = Object.keys(porPessoa).sort();
   if (pessoas.length) {
@@ -306,7 +395,10 @@ function resumoDoMes(ym) {
     });
   }
   linhas.push("");
-  linhas.push("Entra no caixa: " + fmt(entrou) + " · sobra: " + fmt(entrou - meu));
+  linhas.push("Entra no caixa: " + fmt(entrou) + (somaF ? " (fixos " + fmt(somaF) + (somaL ? " + lançados " + fmt(somaL) : "") + ")" : ""));
+  const saldoP = saldoPoupanca(d.pagamentos, ym);
+  if (aplicou || resgatou || saldoP) linhas.push("Poupança: saldo " + fmt(saldoP) + (aplicou || resgatou ? " (no mês: aplicou " + fmt(aplicou) + " · resgatou " + fmt(resgatou) + ")" : ""));
+  linhas.push("Sobra: " + fmt(entrou - Math.max(0, meu + ajuste)));
   return linhas.join("\n");
 }
 
